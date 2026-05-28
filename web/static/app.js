@@ -167,38 +167,145 @@ function renderSummary(s) {
   </div>`).join('');
 }
 
-// ── Render table ──────────────────────────────────────────────────────────
-function renderTable(results) {
+// ── Results table with pagination + delta arrows ──────────────────────────
+const PAGE_SIZE = 5;
+let currentPage = 0;
+
+// delta returns an ▲/▼ span; higherIsBetter=true for speed, false for latency.
+function delta(curr, prev, higherIsBetter) {
+  if (prev == null || curr == null) return '';
+  const diff = curr - prev;
+  // Ignore changes smaller than 2% of the previous value.
+  if (prev !== 0 && Math.abs(diff / prev) < 0.02) return '';
+  const up   = diff > 0;
+  const good = up === higherIsBetter;
+  return `<span class="delta ${up ? 'up' : 'dn'} ${good ? 'good' : 'bad'}">${up ? '▲' : '▼'}</span>`;
+}
+
+function renderTablePage(rows, compRow) {
   const tbody = document.getElementById('results-tbody');
   if (!tbody) return;
-  if (!results || results.length === 0) {
+  if (!rows || rows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No results yet. Run a test to get started.</td></tr>';
     return;
   }
   const srcClass = s => ({ manual: 'src-manual', scheduled: 'src-scheduled', api: 'src-api' }[s] || '');
-  tbody.innerHTML = results.map(r => `<tr>
-    <td>${esc(new Date(r.timestamp).toLocaleString())}</td>
-    <td>${fmt(r.download_mbps)} <span style="color:var(--t3);font-size:.7em">Mbps</span></td>
-    <td>${fmt(r.upload_mbps)} <span style="color:var(--t3);font-size:.7em">Mbps</span></td>
-    <td>${fmt(r.ping_ms)} <span style="color:var(--t3);font-size:.7em">ms</span></td>
-    <td>${fmt(r.jitter_ms)} <span style="color:var(--t3);font-size:.7em">ms</span></td>
-    <td>${esc(r.server_name)}</td>
-    <td><span class="src-badge ${srcClass(r.source)}">${esc(r.source)}</span></td>
-  </tr>`).join('');
+  tbody.innerHTML = rows.map((r, i) => {
+    // "previous" = the next item in time (older), which is rows[i+1] or compRow for the last row.
+    const prev = rows[i + 1] || compRow || null;
+    const dl   = delta(r.download_mbps, prev?.download_mbps, true);
+    const ul   = delta(r.upload_mbps,   prev?.upload_mbps,   true);
+    const pg   = delta(r.ping_ms,       prev?.ping_ms,       false);
+    const jt   = delta(r.jitter_ms,     prev?.jitter_ms,     false);
+    return `<tr>
+      <td>${esc(new Date(r.timestamp).toLocaleString())}</td>
+      <td class="num-cell">${fmt(r.download_mbps)}${dl} <span class="unit">Mbps</span></td>
+      <td class="num-cell">${fmt(r.upload_mbps)}${ul} <span class="unit">Mbps</span></td>
+      <td class="num-cell">${fmt(r.ping_ms)}${pg} <span class="unit">ms</span></td>
+      <td class="num-cell">${fmt(r.jitter_ms)}${jt} <span class="unit">ms</span></td>
+      <td>${esc(r.server_name)}</td>
+      <td><span class="src-badge ${srcClass(r.source)}">${esc(r.source)}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function updatePagination(page, hasNext, totalOnPage) {
+  const prevBtn  = document.getElementById('page-prev');
+  const nextBtn  = document.getElementById('page-next');
+  const pageNum  = document.getElementById('page-num');
+  const pagInfo  = document.getElementById('pag-info');
+  if (prevBtn) prevBtn.disabled = page === 0;
+  if (nextBtn) nextBtn.disabled = !hasNext;
+  if (pageNum) pageNum.textContent = `Page ${page + 1}`;
+  if (pagInfo && totalOnPage > 0) {
+    const from = page * PAGE_SIZE + 1;
+    const to   = from + totalOnPage - 1;
+    pagInfo.textContent = `${from}–${to}`;
+  } else if (pagInfo) {
+    pagInfo.textContent = '';
+  }
+}
+
+async function loadPage(page) {
+  const offset  = page * PAGE_SIZE;
+  // Fetch one extra so we know if there's a next page AND have a comparison row for the last entry.
+  const results = await fetch(`/api/results?limit=${PAGE_SIZE + 1}&offset=${offset}`)
+    .then(r => r.json()).catch(() => []);
+
+  const hasNext  = results.length > PAGE_SIZE;
+  const pageRows = results.slice(0, PAGE_SIZE);
+  const compRow  = results[PAGE_SIZE] || null; // older item for last-row delta
+
+  renderTablePage(pageRows, compRow);
+  updatePagination(page, hasNext, pageRows.length);
+  currentPage = page;
 }
 
 // ── Load all dashboard data ────────────────────────────────────────────────
-async function loadAll() {
-  const [latestRes, summaryRes, resultsRes] = await Promise.allSettled([
+async function loadAll(resetPage) {
+  if (resetPage) currentPage = 0;
+  const [latestRes, summaryRes, sparkRes] = await Promise.allSettled([
     fetch('/api/results/latest').then(r => r.ok ? r.json() : null),
     fetch('/api/summary?days=7').then(r => r.json()),
     fetch('/api/results?limit=25').then(r => r.json()),
   ]);
   renderLatest(latestRes.status === 'fulfilled' ? latestRes.value : null);
   renderSummary(summaryRes.status === 'fulfilled' ? summaryRes.value : null);
-  const results = resultsRes.status === 'fulfilled' ? resultsRes.value : [];
-  renderTable(results);
-  renderSparkline(results);
+  renderSparkline(sparkRes.status === 'fulfilled' ? sparkRes.value : []);
+  await loadPage(currentPage);
+}
+
+// ── Live progress helpers ─────────────────────────────────────────────────
+const PHASE_LABELS = {
+  connecting: 'CONNECTING',
+  ping:       'PING',
+  download:   'DOWNLOAD',
+  upload:     'UPLOAD',
+  done:       'DONE',
+  error:      'ERROR',
+};
+
+function setTestPhase(phase) {
+  const lbl = document.getElementById('phase-label');
+  if (lbl) lbl.textContent = PHASE_LABELS[phase] || phase.toUpperCase();
+}
+
+function setTestRunning(running) {
+  const card = document.getElementById('gauge-card');
+  if (card) card.classList.toggle('testing', running);
+}
+
+function handleProgressEvent(ev) {
+  setTestPhase(ev.phase);
+
+  if (ev.phase === 'connecting' && ev.server_name) {
+    const srvEl = document.getElementById('server-value');
+    if (srvEl) { srvEl.textContent = ev.server_name; srvEl.dataset.raw = '0'; }
+  }
+
+  if (ev.phase === 'ping' && ev.ping_ms > 0) {
+    const el = document.getElementById('ping-value');
+    if (el) { el.textContent = ev.ping_ms.toFixed(1); el.dataset.raw = ev.ping_ms; }
+  }
+
+  if (ev.phase === 'download' && ev.download_mbps > 0) {
+    const el = document.getElementById('dl-value');
+    if (el) { el.textContent = ev.download_mbps.toFixed(1); el.dataset.raw = ev.download_mbps; }
+    updateGauge(ev.download_mbps);
+  }
+
+  if (ev.phase === 'upload' && ev.upload_mbps > 0) {
+    const el = document.getElementById('ul-value');
+    if (el) { el.textContent = ev.upload_mbps.toFixed(1); el.dataset.raw = ev.upload_mbps; }
+  }
+
+  if (ev.phase === 'done') {
+    // Animate the final values for a polished landing.
+    if (ev.download_mbps) { animateNum(document.getElementById('dl-value'), ev.download_mbps, 1); updateGauge(ev.download_mbps); }
+    if (ev.upload_mbps)   { animateNum(document.getElementById('ul-value'), ev.upload_mbps, 1); }
+    if (ev.ping_ms)       { animateNum(document.getElementById('ping-value'), ev.ping_ms, 1); }
+    if (ev.server_name)   { const s = document.getElementById('server-value'); if (s) s.textContent = ev.server_name; }
+  }
 }
 
 // ── Run test buttons ──────────────────────────────────────────────────────
@@ -209,10 +316,34 @@ async function runTest() {
   if (btn) btn.disabled = true;
   if (mobBtn) mobBtn.disabled = true;
   if (label) label.textContent = 'Running…';
+  setTestRunning(true);
+  setTestPhase('connecting');
+
   try {
-    const res = await fetch('/api/test', { method: 'POST' });
-    if (!res.ok) throw new Error(await res.text());
-    await loadAll();
+    const res = await fetch('/api/test/stream', { method: 'POST' });
+    if (!res.ok) { throw new Error(await res.text()); }
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          handleProgressEvent(ev);
+          if (ev.phase === 'error') toast('Test error: ' + (ev.error || 'unknown'), 'err');
+        } catch { /* ignore malformed event */ }
+      }
+    }
+
+    await loadAll(true); // reset to page 1 and refresh
     toast('Test complete', 'ok');
   } catch (e) {
     toast('Test failed: ' + e.message, 'err');
@@ -220,6 +351,7 @@ async function runTest() {
     if (btn) btn.disabled = false;
     if (mobBtn) mobBtn.disabled = false;
     if (label) label.textContent = 'Run Test';
+    setTestRunning(false);
   }
 }
 document.getElementById('run-btn')?.addEventListener('click', runTest);
@@ -253,6 +385,29 @@ document.querySelectorAll('[data-tab]').forEach(btn => {
 // ═══════════════════════════════════════════════════════════
 // SETTINGS
 // ═══════════════════════════════════════════════════════════
+// ── Preferred-server display helpers ─────────────────────────────────────
+function setPreferredServerDisplay(id, name) {
+  const label  = document.getElementById('pref-server-label');
+  const chip   = document.getElementById('pref-server-id-chip');
+  const clearB = document.getElementById('clear-server-btn');
+  const hidId  = document.getElementById('pref-server-id');
+  const hidNm  = document.getElementById('pref-server-name');
+  if (label)  label.textContent  = id ? esc(name || id) : 'Nearest available';
+  if (chip)  { chip.textContent = id ? '#' + id : ''; chip.style.display = id ? '' : 'none'; }
+  if (clearB)  clearB.style.display = id ? '' : 'none';
+  if (hidId)   hidId.value = id || '';
+  if (hidNm)   hidNm.value = name || '';
+}
+
+// Show/hide preferred server field based on engine
+function updatePreferredServerVisibility() {
+  const engine = document.getElementById('cfg-engine')?.value;
+  const field  = document.getElementById('preferred-server-field');
+  if (field) field.classList.toggle('pref-server-hidden', engine === 'ookla');
+}
+document.getElementById('cfg-engine')?.addEventListener('change', updatePreferredServerVisibility);
+
+// ── Settings load / save ──────────────────────────────────────────────────
 async function loadSettings() {
   try {
     const s = await fetch('/api/settings').then(r => r.json());
@@ -268,6 +423,8 @@ async function loadSettings() {
     n('cfg-max-packet-loss',  s.max_packet_loss_ratio);
     n('cfg-cooldown',         s.cooldown_minutes);
     v('cfg-webhooks', (s.webhooks || []).join('\n'));
+    setPreferredServerDisplay(s.preferred_server_id || '', s.preferred_server_name || '');
+    updatePreferredServerVisibility();
   } catch { /* already loaded */ }
 }
 
@@ -289,6 +446,8 @@ async function saveSettings() {
     max_packet_loss_ratio: parseFloat(g('cfg-max-packet-loss')?.value) || 0,
     cooldown_minutes:      parseInt(g('cfg-cooldown')?.value) || 0,
     webhooks: (g('cfg-webhooks')?.value || '').split('\n').map(u => u.trim()).filter(Boolean),
+    preferred_server_id:   g('pref-server-id')?.value || '',
+    preferred_server_name: g('pref-server-name')?.value || '',
   };
   try {
     const res  = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -312,6 +471,88 @@ async function saveSettings() {
   }
 }
 document.getElementById('save-btn')?.addEventListener('click', saveSettings);
+
+// ── Server picker ─────────────────────────────────────────────────────────
+let allServers = null; // cached after first fetch
+
+async function openServerPicker() {
+  document.getElementById('server-picker-dialog').style.display = '';
+  document.getElementById('server-search').value = '';
+  renderServerList(null); // show loading
+  try {
+    if (!allServers) {
+      allServers = await fetch('/api/servers').then(r => r.json());
+    }
+    renderServerList(allServers);
+  } catch (e) {
+    const list = document.getElementById('servers-list');
+    if (list) list.innerHTML = `<div class="servers-loading" style="color:var(--red)">Failed to load servers: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderServerList(servers) {
+  const list = document.getElementById('servers-list');
+  if (!list) return;
+  if (!servers) {
+    list.innerHTML = '<div class="servers-loading"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Fetching nearby servers…</div>';
+    return;
+  }
+  if (servers.length === 0) {
+    list.innerHTML = '<div class="servers-loading">No servers found.</div>';
+    return;
+  }
+  const currentId = document.getElementById('pref-server-id')?.value || '';
+  const q = (document.getElementById('server-search')?.value || '').toLowerCase();
+  const filtered = q
+    ? servers.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.country.toLowerCase().includes(q) ||
+        s.sponsor.toLowerCase().includes(q) ||
+        s.id.includes(q))
+    : servers;
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="servers-loading">No servers match your search.</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(s => {
+    const dist = s.distance_km > 0 ? `${s.distance_km.toFixed(0)} km` : '';
+    const sel  = s.id === currentId ? ' selected' : '';
+    return `<div class="server-row${sel}" data-id="${esc(s.id)}" data-name="${esc(s.name + ', ' + s.country)}">
+      <div class="server-row-info">
+        <div class="server-row-name">${esc(s.name)}, ${esc(s.country)}</div>
+        <div class="server-row-sponsor">${esc(s.sponsor)}</div>
+      </div>
+      <div class="server-row-meta">
+        <span class="server-row-id">#${esc(s.id)}</span>
+        ${dist ? `<span class="server-row-dist">${esc(dist)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.server-row').forEach(row => {
+    row.addEventListener('click', () => {
+      setPreferredServerDisplay(row.dataset.id, row.dataset.name);
+      document.getElementById('server-picker-dialog').style.display = 'none';
+    });
+  });
+}
+
+function closeServerPicker() {
+  document.getElementById('server-picker-dialog').style.display = 'none';
+}
+
+document.getElementById('browse-servers-btn')?.addEventListener('click', openServerPicker);
+document.getElementById('clear-server-btn')?.addEventListener('click', () => setPreferredServerDisplay('', ''));
+document.getElementById('close-server-picker')?.addEventListener('click', closeServerPicker);
+document.getElementById('cancel-server-picker')?.addEventListener('click', closeServerPicker);
+document.getElementById('server-picker-dialog')?.addEventListener('click', function(e) {
+  if (e.target === this) closeServerPicker();
+});
+document.getElementById('server-search')?.addEventListener('input', () => {
+  if (allServers) renderServerList(allServers);
+});
 
 // ═══════════════════════════════════════════════════════════
 // NOTIFICATIONS
@@ -501,6 +742,14 @@ document.getElementById('ch-provider')?.addEventListener('change', e => switchPr
 // Close dialog on overlay click
 document.getElementById('channel-dialog')?.addEventListener('click', function(e) {
   if (e.target === this) closeDialog();
+});
+
+// ── Pagination listeners ──────────────────────────────────────────────────
+document.getElementById('page-prev')?.addEventListener('click', () => {
+  if (currentPage > 0) loadPage(currentPage - 1);
+});
+document.getElementById('page-next')?.addEventListener('click', () => {
+  loadPage(currentPage + 1);
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────

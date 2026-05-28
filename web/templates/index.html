@@ -68,6 +68,10 @@
               </div>
             </div>
             <div class="gauge-sub" id="last-ts"></div>
+            <div class="phase-indicator" id="phase-indicator" aria-live="polite">
+              <span class="phase-dot"></span>
+              <span id="phase-label">MEASURING</span>
+            </div>
           </div>
 
           <!-- Secondary metrics -->
@@ -133,7 +137,10 @@
 
         <!-- Results -->
         <section class="panel">
-          <div class="panel-hd"><h2 class="panel-title">Recent Results</h2></div>
+          <div class="panel-hd">
+            <h2 class="panel-title">Recent Results</h2>
+            <div class="pag-info" id="pag-info"></div>
+          </div>
           <div class="tbl-scroll">
             <table class="data-table">
               <thead><tr>
@@ -142,6 +149,17 @@
               </tr></thead>
               <tbody id="results-tbody"></tbody>
             </table>
+          </div>
+          <div class="pag-row">
+            <button class="btn-ghost pag-btn" id="page-prev" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg>
+              Prev
+            </button>
+            <span class="pag-num" id="page-num">Page 1</span>
+            <button class="btn-ghost pag-btn" id="page-next" disabled>
+              Next
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+            </button>
           </div>
         </section>
       </div>
@@ -158,6 +176,21 @@
                   <option value="go">Go (built-in, no binary required)</option>
                   <option value="ookla">Ookla CLI</option>
                 </select><svg class="sel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg></div>
+              </div>
+              <div class="field" id="preferred-server-field">
+                <label class="field-lbl">Preferred Server</label>
+                <div class="server-pick-row">
+                  <div class="server-pick-display" id="pref-server-display">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <span id="pref-server-label">Nearest available</span>
+                    <span class="server-id-chip" id="pref-server-id-chip" style="display:none"></span>
+                  </div>
+                  <button type="button" class="btn-secondary" id="browse-servers-btn">Browse</button>
+                  <button type="button" class="btn-ghost" id="clear-server-btn" style="display:none">✕ Clear</button>
+                </div>
+                <input type="hidden" id="pref-server-id" value="">
+                <input type="hidden" id="pref-server-name" value="">
+                <p class="field-hint">If the preferred server is unreachable or fails, the nearest server is tried automatically.</p>
               </div>
             </div>
           </div>
@@ -247,6 +280,31 @@
       <span>Alerts</span>
     </button>
   </nav>
+</div>
+
+<!-- Server picker dialog -->
+<div class="dialog-overlay" id="server-picker-dialog" style="display:none">
+  <div class="dialog-panel dialog-panel--wide">
+    <div class="dialog-hd">
+      <h3 class="dialog-title">Select Speedtest Server</h3>
+      <button class="dialog-close" id="close-server-picker" aria-label="Close">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <input type="text" id="server-search" class="field-input" placeholder="Filter by name, country, or sponsor…" autocomplete="off">
+      <div id="servers-list" class="servers-list">
+        <div class="servers-loading">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+          Fetching nearby servers…
+        </div>
+      </div>
+    </div>
+    <div class="dialog-ft">
+      <p class="server-picker-hint">Servers are sorted by distance. If your preferred server is down, the nearest server is used automatically.</p>
+      <button class="btn-secondary" id="cancel-server-picker">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <!-- Channel dialog -->

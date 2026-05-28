@@ -912,3 +912,152 @@ code { font-family: var(--font-mono); font-size: 0.85em; color: var(--cyan); bac
 
 /* ── Focus ───────────────────────────────────────────── */
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ── Server picker ───────────────────────────────────── */
+.dialog-panel--wide { max-width: 640px; }
+
+.server-pick-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.server-pick-display {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.85rem;
+  color: var(--t1);
+  min-width: 0;
+}
+.server-pick-display svg { flex-shrink: 0; color: var(--t3); }
+.server-id-chip {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 0.1em 0.45em;
+  border-radius: 4px;
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  flex-shrink: 0;
+}
+
+/* server list inside dialog */
+#server-search { margin-bottom: 0.75rem; }
+.servers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 340px;
+  overflow-y: auto;
+  margin: 0 -0.25rem;
+  padding: 0 0.25rem;
+}
+.servers-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 2rem;
+  justify-content: center;
+  color: var(--t3);
+  font-size: 0.85rem;
+}
+.server-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--r-sm);
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.server-row:hover { background: var(--card-hov); border-color: var(--border-hi); }
+.server-row.selected { border-color: var(--cyan); background: var(--cyan-dim); }
+.server-row-info { flex: 1; min-width: 0; }
+.server-row-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.server-row-sponsor { font-size: 0.72rem; color: var(--t2); margin-top: 0.1rem; }
+.server-row-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+.server-row-id { font-family: var(--font-mono); font-size: 0.65rem; color: var(--t3); }
+.server-row-dist { font-size: 0.7rem; color: var(--cyan); font-weight: 600; }
+
+.server-picker-hint { font-size: 0.72rem; color: var(--t3); flex: 1; }
+
+/* spinner animation */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; transform-origin: center; }
+
+/* hide preferred server field when engine=ookla */
+.pref-server-hidden { display: none !important; }
+
+/* ── Live test progress ──────────────────────────────── */
+.phase-indicator {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-top: 0.25rem;
+}
+.phase-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: phase-blink 0.7s ease-in-out infinite;
+}
+@keyframes phase-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.55); }
+}
+
+/* Active test: pulse the gauge border and show the indicator */
+.gauge-card.testing { border-color: rgba(34,211,238,0.4); }
+.gauge-card.testing .phase-indicator { display: flex; }
+.gauge-card.testing .gauge-fill {
+  filter: url(#glow);
+  animation: arc-pulse 1.2s ease-in-out infinite;
+}
+@keyframes arc-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* ── Delta arrows ────────────────────────────────────── */
+.num-cell { white-space: nowrap; }
+.unit { color: var(--t3); font-size: .7em; }
+.delta { font-size: 0.72em; font-weight: 700; margin-left: 0.2em; vertical-align: middle; }
+.delta.up.good { color: var(--green); }
+.delta.up.bad  { color: var(--red);   }
+.delta.dn.good { color: var(--green); }
+.delta.dn.bad  { color: var(--red);   }
+
+/* ── Pagination ──────────────────────────────────────── */
+.pag-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem 0 0.25rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+}
+.pag-btn { display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; }
+.pag-num { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; color: var(--t2); text-transform: uppercase; }
+.pag-info { font-size: 0.68rem; color: var(--t3); letter-spacing: 0.04em; }
