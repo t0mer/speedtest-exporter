@@ -1,3 +1,4 @@
+// Package config loads and validates the speedtest-exporter runtime configuration.
 package config
 
 import (
@@ -34,7 +35,7 @@ type ThresholdsConfig struct {
 	MinUploadMbps   float64 `mapstructure:"min_upload_mbps"`
 	MaxPingMs       float64 `mapstructure:"max_ping_ms"`
 	MaxJitterMs     float64 `mapstructure:"max_jitter_ms"`
-	MaxPacketLoss   float64 `mapstructure:"max_packet_loss_ratio"`
+	MaxPacketLossRatio float64 `mapstructure:"max_packet_loss_ratio"`
 	CooldownMinutes int     `mapstructure:"cooldown_minutes"`
 }
 
@@ -76,6 +77,12 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("server.write_timeout", def.Server.WriteTimeout)
 	v.SetDefault("server.enable_ui", def.Server.EnableUI)
 	v.SetDefault("thresholds.cooldown_minutes", def.Thresholds.CooldownMinutes)
+	v.SetDefault("thresholds.min_download_mbps", def.Thresholds.MinDownloadMbps)
+	v.SetDefault("thresholds.min_upload_mbps", def.Thresholds.MinUploadMbps)
+	v.SetDefault("thresholds.max_ping_ms", def.Thresholds.MaxPingMs)
+	v.SetDefault("thresholds.max_jitter_ms", def.Thresholds.MaxJitterMs)
+	v.SetDefault("thresholds.max_packet_loss_ratio", def.Thresholds.MaxPacketLossRatio)
+	v.SetDefault("webhooks", def.Webhooks)
 
 	if path != "" {
 		v.SetConfigFile(path)
