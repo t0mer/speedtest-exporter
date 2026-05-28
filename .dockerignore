@@ -1,0 +1,13 @@
+.git
+.github
+docs/
+*.md
+dist/
+bin/
+data/
+*.db
+*.db-journal
+.env
+.env.*
+.claude/
+CLAUDE.md

@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 60s
+  evaluation_interval: 60s
+
+scrape_configs:
+  - job_name: speedtest
+    static_configs:
+      - targets: ['speedtest-exporter:9090']
+    metrics_path: /metrics
