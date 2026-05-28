@@ -22,3 +22,23 @@ button { background: #1a1a2e; color: #fff; border: none; padding: 0.5rem 1rem; b
 button:hover { background: #2d2d5e; }
 button:disabled { background: #bbb; cursor: not-allowed; }
 .no-data { color: #aaa; font-style: italic; padding: 1rem 0; }
+
+/* Tabs */
+.tabs { display: flex; gap: 0.25rem; }
+.tab-btn { background: rgba(255,255,255,.15); color: #fff; border: none; padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem; transition: background .15s; }
+.tab-btn:hover { background: rgba(255,255,255,.25); }
+.tab-btn.active { background: #fff; color: #1a1a2e; font-weight: 600; }
+
+/* Settings form */
+.form-row { margin-top: 0.5rem; }
+.form-row label, .form-grid label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; color: #555; font-weight: 500; }
+.form-row input, .form-row select, .form-row textarea,
+.form-grid input, .form-grid select { padding: 0.5rem 0.65rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem; background: #fafafa; transition: border-color .15s; }
+.form-row input:focus, .form-row select:focus, .form-row textarea:focus,
+.form-grid input:focus, .form-grid select:focus { outline: none; border-color: #1a1a2e; background: #fff; }
+.form-row small { color: #aaa; font-size: 0.78rem; margin-top: 0.15rem; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 0.5rem; }
+.form-actions { display: flex; align-items: center; gap: 1rem; }
+#settings-msg { font-size: 0.85rem; }
+#settings-msg.ok { color: #2a9d5c; }
+#settings-msg.err { color: #c0392b; }

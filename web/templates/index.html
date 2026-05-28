@@ -10,10 +10,15 @@
 <header>
   <div class="header-inner">
     <h1>Speedtest Exporter</h1>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </nav>
     <span id="refresh-timer">Auto-refreshing in 60s</span>
   </div>
 </header>
-<main>
+
+<main id="dashboard-tab">
   <section>
     <h2>Latest Result</h2>
     <div id="latest-cards" class="cards"></div>
@@ -38,6 +43,69 @@
     </table>
   </section>
 </main>
+
+<main id="settings-tab" style="display:none">
+  <section>
+    <h2>Test Engine</h2>
+    <div class="form-row">
+      <label>Engine
+        <select id="cfg-engine">
+          <option value="go">Go (built-in, no binary needed)</option>
+          <option value="ookla">Ookla CLI</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Schedule</h2>
+    <div class="form-row">
+      <label>Cron schedule (leave empty to disable)
+        <input type="text" id="cfg-schedule" placeholder="@every 1h">
+        <small>Examples: @every 1h &nbsp;·&nbsp; @hourly &nbsp;·&nbsp; 0 */6 * * *</small>
+      </label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Thresholds <small style="font-weight:normal;font-size:0.85em">(0 = disabled)</small></h2>
+    <div class="form-grid">
+      <label>Min Download (Mbps)
+        <input type="number" id="cfg-min-download" step="0.1" min="0">
+      </label>
+      <label>Min Upload (Mbps)
+        <input type="number" id="cfg-min-upload" step="0.1" min="0">
+      </label>
+      <label>Max Ping (ms)
+        <input type="number" id="cfg-max-ping" step="0.1" min="0">
+      </label>
+      <label>Max Jitter (ms)
+        <input type="number" id="cfg-max-jitter" step="0.1" min="0">
+      </label>
+      <label>Max Packet Loss (ratio 0–1)
+        <input type="number" id="cfg-max-packet-loss" step="0.001" min="0" max="1">
+      </label>
+      <label>Cooldown (minutes)
+        <input type="number" id="cfg-cooldown" step="1" min="0">
+      </label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Webhooks</h2>
+    <div class="form-row">
+      <label>Notification URLs (one per line)
+        <textarea id="cfg-webhooks" rows="4" placeholder="https://hooks.example.com/speedtest"></textarea>
+      </label>
+    </div>
+  </section>
+
+  <section class="form-actions">
+    <button id="save-btn">Save Settings</button>
+    <span id="settings-msg"></span>
+  </section>
+</main>
+
 <script src="/static/app.js"></script>
 </body>
 </html>

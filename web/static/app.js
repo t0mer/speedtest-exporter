@@ -93,3 +93,78 @@ setInterval(() => {
 }, 1000);
 
 loadAll();
+
+// ── Settings tab ──────────────────────────────────────────────────────────
+
+async function loadSettings() {
+  const s = await fetch('/api/settings').then(r => r.json());
+  document.getElementById('cfg-engine').value = s.engine || 'go';
+  document.getElementById('cfg-schedule').value = s.schedule || '';
+  document.getElementById('cfg-min-download').value = s.min_download_mbps || 0;
+  document.getElementById('cfg-min-upload').value = s.min_upload_mbps || 0;
+  document.getElementById('cfg-max-ping').value = s.max_ping_ms || 0;
+  document.getElementById('cfg-max-jitter').value = s.max_jitter_ms || 0;
+  document.getElementById('cfg-max-packet-loss').value = s.max_packet_loss_ratio || 0;
+  document.getElementById('cfg-cooldown').value = s.cooldown_minutes || 0;
+  document.getElementById('cfg-webhooks').value = (s.webhooks || []).join('\n');
+}
+
+async function saveSettings() {
+  const btn = document.getElementById('save-btn');
+  const msg = document.getElementById('settings-msg');
+  btn.disabled = true;
+  msg.textContent = '';
+  msg.className = '';
+
+  const webhooksRaw = document.getElementById('cfg-webhooks').value;
+  const webhooks = webhooksRaw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+
+  const payload = {
+    engine:               document.getElementById('cfg-engine').value,
+    schedule:             document.getElementById('cfg-schedule').value.trim(),
+    min_download_mbps:    parseFloat(document.getElementById('cfg-min-download').value) || 0,
+    min_upload_mbps:      parseFloat(document.getElementById('cfg-min-upload').value) || 0,
+    max_ping_ms:          parseFloat(document.getElementById('cfg-max-ping').value) || 0,
+    max_jitter_ms:        parseFloat(document.getElementById('cfg-max-jitter').value) || 0,
+    max_packet_loss_ratio:parseFloat(document.getElementById('cfg-max-packet-loss').value) || 0,
+    cooldown_minutes:     parseInt(document.getElementById('cfg-cooldown').value) || 0,
+    webhooks,
+  };
+
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.textContent = data.error || 'Save failed';
+      msg.className = 'err';
+    } else {
+      msg.textContent = 'Settings saved';
+      msg.className = 'ok';
+      setTimeout(() => { msg.textContent = ''; msg.className = ''; }, 3000);
+    }
+  } catch (e) {
+    msg.textContent = 'Network error: ' + e.message;
+    msg.className = 'err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('save-btn').addEventListener('click', saveSettings);
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('dashboard-tab').style.display = tab === 'dashboard' ? '' : 'none';
+    document.getElementById('settings-tab').style.display  = tab === 'settings'  ? '' : 'none';
+    if (tab === 'settings') loadSettings();
+  });
+});
