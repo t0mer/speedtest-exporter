@@ -13,9 +13,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/t0mer/speedtest-exporter/internal/api"
 	"github.com/t0mer/speedtest-exporter/internal/config"
+	"github.com/t0mer/speedtest-exporter/internal/crypto"
 	"github.com/t0mer/speedtest-exporter/internal/database"
 	"github.com/t0mer/speedtest-exporter/internal/metrics"
 	"github.com/t0mer/speedtest-exporter/internal/model"
+	"github.com/t0mer/speedtest-exporter/internal/notifications"
 	"github.com/t0mer/speedtest-exporter/internal/notify"
 	"github.com/t0mer/speedtest-exporter/internal/runner"
 	"github.com/t0mer/speedtest-exporter/internal/service"
@@ -91,6 +93,16 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 			}
 			defer svc.Close()
 
+			// Initialise encryption key (generated once, stored in data dir).
+			encKey, err := crypto.LoadOrCreateKey(cfg.DataDir)
+			if err != nil {
+				return fmt.Errorf("encryption key: %w", err)
+			}
+
+			// Wire notification store + manager.
+			notifStore := notifications.NewStore(svc.DB().SQL(), encKey)
+			svc.SetNotificationManager(notifications.NewManager(notifStore))
+
 			// Load DB settings and apply over file config for runtime fields.
 			dbSettings, err := svc.DB().GetSettings(context.Background())
 			if err != nil {
@@ -106,7 +118,7 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 				schedule = dbSettings.Schedule
 			}
 
-			srv := api.NewServer(svc, cfg, cfg.OoklaPath, nil)
+			srv := api.NewServer(svc, cfg, cfg.OoklaPath, notifStore)
 			if schedule != "" {
 				if err := srv.SetSchedule(schedule); err != nil {
 					return fmt.Errorf("scheduler: %w", err)
