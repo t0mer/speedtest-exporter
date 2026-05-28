@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/t0mer/speedtest-exporter/internal/database"
 	"github.com/t0mer/speedtest-exporter/internal/metrics"
 	"github.com/t0mer/speedtest-exporter/internal/model"
+	"github.com/t0mer/speedtest-exporter/internal/notifications"
 	"github.com/t0mer/speedtest-exporter/internal/notify"
 	"github.com/t0mer/speedtest-exporter/internal/runner"
 )
@@ -17,9 +19,11 @@ import (
 // Service orchestrates: run → persist → metrics → evaluate → notify.
 type Service struct {
 	db       *database.DB
+	mu       sync.RWMutex
 	runner   runner.Runner
 	metrics  *metrics.Metrics
 	notifier *notify.Notifier
+	notifMgr *notifications.Manager // optional; nil disables channel notifications
 }
 
 // New assembles a Service from its dependencies.
@@ -33,14 +37,21 @@ func (s *Service) Run(ctx context.Context, source model.Source) (*model.Result, 
 	start := time.Now()
 	s.metrics.IncrTests(string(source), "started")
 
-	result, err := s.runner.Run(ctx)
+	s.mu.RLock()
+	r := s.runner
+	s.mu.RUnlock()
+
+	result, err := r.Run(ctx)
 	if err != nil {
 		s.metrics.IncrTests(string(source), "error")
+		if s.notifMgr != nil {
+			go s.notifMgr.NotifyFailure(context.Background(), err)
+		}
 		return nil, fmt.Errorf("run speed test: %w", err)
 	}
 
 	result.Source = source
-	result.Engine = s.runner.Engine()
+	result.Engine = r.Engine()
 	result.Timestamp = time.Now().UTC()
 	result.DurationSec = time.Since(start).Seconds()
 
@@ -60,6 +71,11 @@ func (s *Service) Run(ctx context.Context, source model.Source) (*model.Result, 
 		s.metrics.IncrBreaches(b.Metric)
 	}
 
+	// Fire channel notifications asynchronously — must not block the test pipeline.
+	if s.notifMgr != nil {
+		go s.notifMgr.NotifySuccess(context.Background(), result)
+	}
+
 	return result, nil
 }
 
@@ -71,3 +87,35 @@ func (s *Service) Metrics() *metrics.Metrics { return s.metrics }
 
 // Close shuts down the database connection.
 func (s *Service) Close() error { return s.db.Close() }
+
+// SetEngine swaps the active runner to match the given engine and ooklaPath.
+func (s *Service) SetEngine(engine model.Engine, ooklaPath string) {
+	var r runner.Runner
+	if engine == model.EngineOokla {
+		r = runner.NewOoklaRunner(ooklaPath)
+	} else {
+		r = runner.NewGoRunner()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runner = r
+}
+
+// SetNotificationManager wires the notification manager used after each test run.
+func (s *Service) SetNotificationManager(mgr *notifications.Manager) {
+	s.notifMgr = mgr
+}
+
+// Apply applies DB-persisted settings to the live service components.
+// It hot-swaps the runner and updates the notifier without a restart.
+func (s *Service) Apply(settings *model.Settings, ooklaPath string) {
+	s.notifier.Update(notify.ThresholdConfig{
+		MinDownloadMbps: settings.MinDownloadMbps,
+		MinUploadMbps:   settings.MinUploadMbps,
+		MaxPingMs:       settings.MaxPingMs,
+		MaxJitterMs:     settings.MaxJitterMs,
+		MaxPacketLoss:   settings.MaxPacketLossRatio,
+		CooldownMinutes: settings.CooldownMinutes,
+	}, settings.Webhooks)
+	s.SetEngine(model.Engine(settings.Engine), ooklaPath)
+}

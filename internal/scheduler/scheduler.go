@@ -38,6 +38,14 @@ func (s *Scheduler) Start() { s.cron.Start() }
 // Stop halts the scheduler, blocking until the running job (if any) completes.
 func (s *Scheduler) Stop() { s.cron.Stop() }
 
+// ValidateSpec returns an error if spec is not a valid cron expression.
+// Accepts the same syntax as New (robfig/cron v3, including @every descriptors).
+func ValidateSpec(spec string) error {
+	c := cron.New()
+	_, err := c.AddFunc(spec, func() {})
+	return err
+}
+
 func (s *Scheduler) runOnce() {
 	if !s.running.CompareAndSwap(false, true) {
 		slog.Warn("scheduled test skipped: previous run still in progress")

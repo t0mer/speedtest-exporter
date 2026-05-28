@@ -2,42 +2,315 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Speedtest Exporter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <div class="header-inner">
-    <h1>Speedtest Exporter</h1>
-    <span id="refresh-timer">Auto-refreshing in 60s</span>
-  </div>
-</header>
-<main>
-  <section>
-    <h2>Latest Result</h2>
-    <div id="latest-cards" class="cards"></div>
-  </section>
-  <section>
-    <h2>7-Day Summary</h2>
-    <div id="summary-cards" class="cards"></div>
-  </section>
-  <section>
-    <div class="section-header">
-      <h2>Recent Results</h2>
-      <button id="run-btn">Run Test Now</button>
+<div class="app">
+
+  <header class="header">
+    <div class="header-brand">
+      <svg class="brand-bolt" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>
+      <span class="brand-name">speedtest<span class="brand-hi">exporter</span></span>
     </div>
-    <table id="results-table">
-      <thead>
-        <tr>
-          <th>Time</th><th>Download</th><th>Upload</th>
-          <th>Ping</th><th>Jitter</th><th>Server</th><th>Source</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </section>
-</main>
+    <nav class="desktop-nav" role="navigation" aria-label="Main">
+      <button class="nav-pill active" data-tab="dashboard">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-pill" data-tab="settings">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
+        Settings
+      </button>
+      <button class="nav-pill" data-tab="notifications">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Alerts
+      </button>
+    </nav>
+    <div class="header-right">
+      <div class="refresh-chip"><span class="pulse-dot"></span><span id="refresh-timer">60s</span></div>
+      <button class="run-btn" id="run-btn">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        <span class="run-label">Run Test</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="content-wrap">
+    <main class="content">
+
+      <!-- ══════════ DASHBOARD ══════════ -->
+      <div class="tab-panel active" id="tab-dashboard">
+        <div class="hero">
+          <!-- Download gauge -->
+          <div class="gauge-card" id="gauge-card">
+            <div class="gauge-inner">
+              <svg class="gauge-svg" viewBox="0 0 200 148" fill="none" aria-hidden="true">
+                <defs>
+                  <linearGradient id="dlg" x1="0%" y1="0%" x2="100%" y2="0%" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#0ea5e9"/>
+                    <stop offset="50%" stop-color="#22d3ee"/>
+                    <stop offset="100%" stop-color="#67e8f9"/>
+                  </linearGradient>
+                  <filter id="glow"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                </defs>
+                <path class="gauge-track" d="M 30.72 140 A 80 80 0 1 1 169.28 140" stroke-linecap="round" stroke-width="10"/>
+                <path class="gauge-fill" id="gauge-arc" d="" stroke="url(#dlg)" stroke-linecap="round" stroke-width="10" filter="url(#glow)"/>
+              </svg>
+              <div class="gauge-text">
+                <div class="gauge-num" id="dl-value">—</div>
+                <div class="gauge-unit-lbl">Mbps</div>
+                <div class="gauge-lbl">Download</div>
+              </div>
+            </div>
+            <div class="gauge-sub" id="last-ts"></div>
+          </div>
+
+          <!-- Secondary metrics -->
+          <div class="secondary-grid">
+            <div class="smet-card smet-ul">
+              <div class="smet-accent"></div>
+              <div class="smet-body">
+                <div class="smet-val" id="ul-value">—</div>
+                <div class="smet-unit">Mbps</div>
+                <div class="smet-lbl">Upload</div>
+              </div>
+              <svg class="smet-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            </div>
+            <div class="smet-card smet-ping">
+              <div class="smet-accent"></div>
+              <div class="smet-body">
+                <div class="smet-val" id="ping-value">—</div>
+                <div class="smet-unit">ms</div>
+                <div class="smet-lbl">Ping</div>
+              </div>
+              <svg class="smet-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h2l3 8 4-16 3 8h6"/></svg>
+            </div>
+            <div class="smet-card smet-jitter">
+              <div class="smet-accent"></div>
+              <div class="smet-body">
+                <div class="smet-val" id="jitter-value">—</div>
+                <div class="smet-unit">ms</div>
+                <div class="smet-lbl">Jitter</div>
+              </div>
+              <svg class="smet-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <div class="smet-card smet-server">
+              <div class="smet-accent"></div>
+              <div class="smet-body smet-body--server">
+                <div class="smet-val smet-val--server" id="server-value">—</div>
+                <div class="smet-lbl">Server</div>
+                <div class="smet-isp" id="isp-value"></div>
+              </div>
+              <svg class="smet-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="5" rx="1"/><rect x="2" y="11" width="20" height="5" rx="1"/><line x1="6" y1="5.5" x2="6.01" y2="5.5"/><line x1="6" y1="13.5" x2="6.01" y2="13.5"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary stats -->
+        <section class="panel">
+          <div class="panel-hd">
+            <h2 class="panel-title">7-Day Summary</h2>
+          </div>
+          <div class="summary-grid" id="summary-grid"></div>
+        </section>
+
+        <!-- Sparkline -->
+        <section class="panel">
+          <div class="panel-hd">
+            <h2 class="panel-title">Speed History</h2>
+            <div class="legend">
+              <span class="leg-item"><span class="leg-dot" style="background:#22d3ee"></span>Download</span>
+              <span class="leg-item"><span class="leg-dot" style="background:#a78bfa"></span>Upload</span>
+            </div>
+          </div>
+          <div class="chart-panel"><div id="sparkline" class="sparkline-box"></div></div>
+        </section>
+
+        <!-- Results -->
+        <section class="panel">
+          <div class="panel-hd"><h2 class="panel-title">Recent Results</h2></div>
+          <div class="tbl-scroll">
+            <table class="data-table">
+              <thead><tr>
+                <th>Time</th><th>Download</th><th>Upload</th>
+                <th>Ping</th><th>Jitter</th><th>Server</th><th>Source</th>
+              </tr></thead>
+              <tbody id="results-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- ══════════ SETTINGS ══════════ -->
+      <div class="tab-panel" id="tab-settings">
+        <div class="settings-page">
+
+          <div class="stg-block">
+            <div class="stg-block-hd"><h3>Engine</h3><p>Backend used to run the speed test.</p></div>
+            <div class="stg-block-body">
+              <div class="field"><label class="field-lbl" for="cfg-engine">Test Backend</label>
+                <div class="sel-wrap"><select id="cfg-engine" class="field-sel">
+                  <option value="go">Go (built-in, no binary required)</option>
+                  <option value="ookla">Ookla CLI</option>
+                </select><svg class="sel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stg-block">
+            <div class="stg-block-hd"><h3>Schedule</h3><p>Run tests automatically on a cron schedule.</p></div>
+            <div class="stg-block-body">
+              <div class="field"><label class="field-lbl" for="cfg-schedule">Cron Expression</label>
+                <input type="text" id="cfg-schedule" class="field-input field-mono" placeholder="@every 1h">
+                <p class="field-hint">Leave empty to disable &nbsp;·&nbsp; <code>@every 1h</code> &nbsp;·&nbsp; <code>@hourly</code> &nbsp;·&nbsp; <code>0 */6 * * *</code></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="stg-block">
+            <div class="stg-block-hd"><h3>Thresholds</h3><p>Trigger notifications when values breach limits. Set 0 to disable.</p></div>
+            <div class="stg-block-body">
+              <div class="fields-2">
+                <div class="field"><label class="field-lbl" for="cfg-min-download">Min Download</label>
+                  <div class="affix-wrap"><input type="number" id="cfg-min-download" class="field-input" step="0.1" min="0"><span class="affix">Mbps</span></div>
+                </div>
+                <div class="field"><label class="field-lbl" for="cfg-min-upload">Min Upload</label>
+                  <div class="affix-wrap"><input type="number" id="cfg-min-upload" class="field-input" step="0.1" min="0"><span class="affix">Mbps</span></div>
+                </div>
+                <div class="field"><label class="field-lbl" for="cfg-max-ping">Max Ping</label>
+                  <div class="affix-wrap"><input type="number" id="cfg-max-ping" class="field-input" step="0.1" min="0"><span class="affix">ms</span></div>
+                </div>
+                <div class="field"><label class="field-lbl" for="cfg-max-jitter">Max Jitter</label>
+                  <div class="affix-wrap"><input type="number" id="cfg-max-jitter" class="field-input" step="0.1" min="0"><span class="affix">ms</span></div>
+                </div>
+                <div class="field"><label class="field-lbl" for="cfg-max-packet-loss">Max Packet Loss</label>
+                  <div class="affix-wrap"><input type="number" id="cfg-max-packet-loss" class="field-input" step="0.001" min="0" max="1"><span class="affix">ratio</span></div>
+                </div>
+                <div class="field"><label class="field-lbl" for="cfg-cooldown">Cooldown</label>
+                  <div class="affix-wrap"><input type="number" id="cfg-cooldown" class="field-input" step="1" min="0"><span class="affix">min</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stg-block">
+            <div class="stg-block-hd"><h3>Webhooks</h3><p>POST a JSON payload on threshold breach.</p></div>
+            <div class="stg-block-body">
+              <div class="field"><label class="field-lbl" for="cfg-webhooks">URLs (one per line)</label>
+                <textarea id="cfg-webhooks" class="field-textarea field-mono" rows="4" placeholder="https://hooks.example.com/speedtest"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="stg-footer">
+            <button class="btn-primary" id="save-btn">Save Settings</button>
+            <span class="save-msg" id="settings-msg"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════ NOTIFICATIONS ══════════ -->
+      <div class="tab-panel" id="tab-notifications">
+        <div class="notif-hd">
+          <div><h2 class="page-title">Notification Channels</h2><p class="page-sub">Send alerts after each test via Shoutrrr, WhatsApp, or GreenAPI.</p></div>
+          <button class="btn-primary" id="add-channel-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Channel
+          </button>
+        </div>
+        <div id="channels-list" class="channels-list"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Mobile nav -->
+  <nav class="mob-nav" role="navigation" aria-label="Mobile navigation">
+    <button class="mob-tab active" data-tab="dashboard">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="mob-tab" data-tab="settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      <span>Settings</span>
+    </button>
+    <button class="mob-run-btn" id="mob-run-btn" aria-label="Run speed test">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+    </button>
+    <button class="mob-tab" data-tab="notifications">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span>Alerts</span>
+    </button>
+  </nav>
+</div>
+
+<!-- Channel dialog -->
+<div class="dialog-overlay" id="channel-dialog" role="dialog" aria-modal="true" style="display:none">
+  <div class="dialog-panel">
+    <div class="dialog-hd">
+      <h3 class="dialog-title" id="dialog-title">Add Channel</h3>
+      <button class="dialog-close" id="ch-cancel-btn" aria-label="Close">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <div class="field"><label class="field-lbl" for="ch-name">Channel Name</label>
+        <input type="text" id="ch-name" class="field-input" placeholder="e.g. Team Slack">
+      </div>
+      <div class="field"><label class="field-lbl" for="ch-provider">Provider</label>
+        <div class="sel-wrap"><select id="ch-provider" class="field-sel">
+          <option value="shoutrrr">Shoutrrr (Slack, Discord, Telegram, SMTP, ntfy…)</option>
+          <option value="greenapi">GreenAPI (WhatsApp cloud)</option>
+          <option value="whatsapp_web">WhatsApp Web (self-hosted)</option>
+        </select><svg class="sel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg></div>
+      </div>
+
+      <div id="fields-shoutrrr" class="provider-fields">
+        <div class="field"><label class="field-lbl" for="ch-shoutrrr-url">Shoutrrr URL</label>
+          <input type="text" id="ch-shoutrrr-url" class="field-input field-mono" placeholder="slack://token@channel">
+          <p class="field-hint">slack:// · discord:// · telegram:// · gotify:// · smtp://</p>
+        </div>
+      </div>
+      <div id="fields-greenapi" class="provider-fields" style="display:none">
+        <div class="fields-2">
+          <div class="field"><label class="field-lbl" for="ch-ga-instance">Instance ID</label><input type="text" id="ch-ga-instance" class="field-input field-mono" placeholder="1234567890"></div>
+          <div class="field"><label class="field-lbl" for="ch-ga-token">Token <span class="badge-secret">secret</span></label><input type="password" id="ch-ga-token" class="field-input" placeholder="••••••••"></div>
+          <div class="field"><label class="field-lbl" for="ch-ga-phone">Recipient Phone</label><input type="text" id="ch-ga-phone" class="field-input field-mono" placeholder="79001234567"></div>
+          <div class="field"><label class="field-lbl" for="ch-ga-apiurl">API URL <span class="badge-opt">optional</span></label><input type="text" id="ch-ga-apiurl" class="field-input field-mono" placeholder="https://api.green-api.com"></div>
+        </div>
+      </div>
+      <div id="fields-whatsapp_web" class="provider-fields" style="display:none">
+        <div class="fields-2">
+          <div class="field"><label class="field-lbl" for="ch-wa-baseurl">Base URL</label><input type="text" id="ch-wa-baseurl" class="field-input field-mono" placeholder="http://localhost:3000"></div>
+          <div class="field"><label class="field-lbl" for="ch-wa-phone">Recipient Phone</label><input type="text" id="ch-wa-phone" class="field-input field-mono" placeholder="628123456789"></div>
+          <div class="field"><label class="field-lbl" for="ch-wa-user">Username <span class="badge-opt">optional</span></label><input type="text" id="ch-wa-user" class="field-input" placeholder="Basic Auth username"></div>
+          <div class="field"><label class="field-lbl" for="ch-wa-pass">Password <span class="badge-secret">secret</span></label><input type="password" id="ch-wa-pass" class="field-input" placeholder="••••••••"></div>
+        </div>
+      </div>
+
+      <div class="toggles">
+        <label class="tgl-row"><span class="tgl"><input type="checkbox" id="ch-enabled" checked><span class="tgl-thumb"></span></span><span class="tgl-info"><span class="tgl-title">Enabled</span><span class="tgl-desc">Channel is active</span></span></label>
+        <label class="tgl-row"><span class="tgl"><input type="checkbox" id="ch-on-success" checked><span class="tgl-thumb"></span></span><span class="tgl-info"><span class="tgl-title">Notify on success</span><span class="tgl-desc">Fire when test completes normally</span></span></label>
+        <label class="tgl-row"><span class="tgl"><input type="checkbox" id="ch-on-failure" checked><span class="tgl-thumb"></span></span><span class="tgl-info"><span class="tgl-title">Notify on failure</span><span class="tgl-desc">Fire when test runner errors</span></span></label>
+      </div>
+    </div>
+    <div class="dialog-ft">
+      <button class="btn-ghost" id="ch-test-btn"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Send Test</button>
+      <span class="test-feedback" id="ch-test-msg"></span>
+      <div style="display:flex;gap:0.5rem;margin-left:auto">
+        <button class="btn-secondary" id="ch-cancel-btn2">Cancel</button>
+        <button class="btn-primary" id="ch-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toast-stack" aria-live="polite"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>

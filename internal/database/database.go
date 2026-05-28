@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -33,6 +34,22 @@ CREATE TABLE IF NOT EXISTS results (
     duration_sec  REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_results_timestamp ON results(timestamp DESC);
+CREATE TABLE IF NOT EXISTS settings (
+    id      INTEGER PRIMARY KEY CHECK (id = 1),
+    data    TEXT NOT NULL,
+    updated DATETIME NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notification_channels (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT NOT NULL,
+    provider          TEXT NOT NULL,
+    config_encrypted  BLOB NOT NULL,
+    enabled           INTEGER NOT NULL DEFAULT 1,
+    notify_on_success INTEGER NOT NULL DEFAULT 1,
+    notify_on_failure INTEGER NOT NULL DEFAULT 1,
+    created_at        DATETIME NOT NULL,
+    updated_at        DATETIME NOT NULL
+);
 `
 
 // DB wraps a SQLite connection.
@@ -46,7 +63,10 @@ func Open(dir string) (*DB, error) {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
 	dbPath := filepath.Join(dir, "results.db")
-	db, err := sql.Open("sqlite", dbPath)
+	// Use URI format: _pragma=busy_timeout prevents SQLITE_BUSY under brief contention;
+	// mode=rwc explicitly requests read-write-create, avoiding read-only fallback.
+	dsn := "file:" + dbPath + "?_pragma=busy_timeout(10000)&mode=rwc"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
@@ -181,6 +201,41 @@ func (d *DB) Summary(ctx context.Context, days int) (*Summary, error) {
 	}
 	return s, nil
 }
+
+// GetSettings returns the persisted runtime settings, or nil if none have been saved.
+func (d *DB) GetSettings(ctx context.Context) (*model.Settings, error) {
+	const q = `SELECT data FROM settings WHERE id = 1`
+	row := d.db.QueryRowContext(ctx, q)
+	var data string
+	if err := row.Scan(&data); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get settings: %w", err)
+	}
+	var s model.Settings
+	if err := json.Unmarshal([]byte(data), &s); err != nil {
+		return nil, fmt.Errorf("unmarshal settings: %w", err)
+	}
+	return &s, nil
+}
+
+// SaveSettings persists settings, replacing any previously saved row.
+func (d *DB) SaveSettings(ctx context.Context, s *model.Settings) error {
+	data, err := json.Marshal(s)
+	if err != nil {
+		return fmt.Errorf("marshal settings: %w", err)
+	}
+	const q = `INSERT INTO settings (id, data, updated) VALUES (1, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated = excluded.updated`
+	if _, err := d.db.ExecContext(ctx, q, string(data), time.Now().UTC()); err != nil {
+		return fmt.Errorf("save settings: %w", err)
+	}
+	return nil
+}
+
+// SQL exposes the underlying *sql.DB for packages that need direct access.
+func (d *DB) SQL() *sql.DB { return d.db }
 
 // scanRow is a generic row scanner that works with both *sql.Row.Scan and rows.Scan.
 func scanRow(scan func(...any) error) (*model.Result, error) {

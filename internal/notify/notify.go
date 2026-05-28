@@ -49,6 +49,14 @@ func New(cfg ThresholdConfig, webhooks []string) *Notifier {
 	return &Notifier{cfg: cfg, webhooks: webhooks}
 }
 
+// Update replaces the threshold config and webhook list atomically.
+func (n *Notifier) Update(cfg ThresholdConfig, webhooks []string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.cfg = cfg
+	n.webhooks = webhooks
+}
+
 // Evaluate returns all threshold violations for the given result.
 func (n *Notifier) Evaluate(r *model.Result) []Breach {
 	var breaches []Breach

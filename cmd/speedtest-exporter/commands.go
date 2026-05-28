@@ -13,12 +13,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/t0mer/speedtest-exporter/internal/api"
 	"github.com/t0mer/speedtest-exporter/internal/config"
+	"github.com/t0mer/speedtest-exporter/internal/crypto"
 	"github.com/t0mer/speedtest-exporter/internal/database"
 	"github.com/t0mer/speedtest-exporter/internal/metrics"
 	"github.com/t0mer/speedtest-exporter/internal/model"
+	"github.com/t0mer/speedtest-exporter/internal/notifications"
 	"github.com/t0mer/speedtest-exporter/internal/notify"
 	"github.com/t0mer/speedtest-exporter/internal/runner"
-	"github.com/t0mer/speedtest-exporter/internal/scheduler"
 	"github.com/t0mer/speedtest-exporter/internal/service"
 )
 
@@ -92,25 +93,48 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 			}
 			defer svc.Close()
 
-			if cfg.Schedule != "" {
-				sched, err := scheduler.New(svc, cfg.Schedule)
-				if err != nil {
+			// Initialise encryption key (generated once, stored in data dir).
+			encKey, err := crypto.LoadOrCreateKey(cfg.DataDir)
+			if err != nil {
+				return fmt.Errorf("encryption key: %w", err)
+			}
+
+			// Wire notification store + manager.
+			notifStore := notifications.NewStore(svc.DB().SQL(), encKey)
+			svc.SetNotificationManager(notifications.NewManager(notifStore))
+
+			// Load DB settings and apply over file config for runtime fields.
+			dbSettings, err := svc.DB().GetSettings(context.Background())
+			if err != nil {
+				slog.Warn("could not load settings from DB", "error", err)
+			}
+			if dbSettings != nil {
+				svc.Apply(dbSettings, cfg.OoklaPath)
+			}
+
+			// Determine active schedule: DB takes precedence over file config.
+			schedule := cfg.Schedule
+			if dbSettings != nil && dbSettings.Schedule != "" {
+				schedule = dbSettings.Schedule
+			}
+
+			srv := api.NewServer(svc, cfg, cfg.OoklaPath, notifStore)
+			if schedule != "" {
+				if err := srv.SetSchedule(schedule); err != nil {
 					return fmt.Errorf("scheduler: %w", err)
 				}
-				sched.Start()
-				defer sched.Stop()
 			}
+			defer srv.StopScheduler()
 
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
-			srv := api.NewServer(svc, cfg)
 			errCh := make(chan error, 1)
 			go func() { errCh <- srv.ListenAndServe() }()
 
 			select {
 			case <-ctx.Done():
-				return nil // defers run: svc.Close(), sched.Stop()
+				return nil
 			case err := <-errCh:
 				return err
 			}
