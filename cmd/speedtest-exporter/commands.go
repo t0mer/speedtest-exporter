@@ -18,7 +18,6 @@ import (
 	"github.com/t0mer/speedtest-exporter/internal/model"
 	"github.com/t0mer/speedtest-exporter/internal/notify"
 	"github.com/t0mer/speedtest-exporter/internal/runner"
-	"github.com/t0mer/speedtest-exporter/internal/scheduler"
 	"github.com/t0mer/speedtest-exporter/internal/service"
 )
 
@@ -92,25 +91,38 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 			}
 			defer svc.Close()
 
-			if cfg.Schedule != "" {
-				sched, err := scheduler.New(svc, cfg.Schedule)
-				if err != nil {
+			// Load DB settings and apply over file config for runtime fields.
+			dbSettings, err := svc.DB().GetSettings(context.Background())
+			if err != nil {
+				slog.Warn("could not load settings from DB", "error", err)
+			}
+			if dbSettings != nil {
+				svc.Apply(dbSettings, cfg.OoklaPath)
+			}
+
+			// Determine active schedule: DB takes precedence over file config.
+			schedule := cfg.Schedule
+			if dbSettings != nil && dbSettings.Schedule != "" {
+				schedule = dbSettings.Schedule
+			}
+
+			srv := api.NewServer(svc, cfg, cfg.OoklaPath)
+			if schedule != "" {
+				if err := srv.SetSchedule(schedule); err != nil {
 					return fmt.Errorf("scheduler: %w", err)
 				}
-				sched.Start()
-				defer sched.Stop()
 			}
+			defer srv.StopScheduler()
 
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
-			srv := api.NewServer(svc, cfg, cfg.OoklaPath)
 			errCh := make(chan error, 1)
 			go func() { errCh <- srv.ListenAndServe() }()
 
 			select {
 			case <-ctx.Done():
-				return nil // defers run: svc.Close(), sched.Stop()
+				return nil
 			case err := <-errCh:
 				return err
 			}
