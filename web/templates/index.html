@@ -137,7 +137,10 @@
 
         <!-- Results -->
         <section class="panel">
-          <div class="panel-hd"><h2 class="panel-title">Recent Results</h2></div>
+          <div class="panel-hd">
+            <h2 class="panel-title">Recent Results</h2>
+            <div class="pag-info" id="pag-info"></div>
+          </div>
           <div class="tbl-scroll">
             <table class="data-table">
               <thead><tr>
@@ -146,6 +149,17 @@
               </tr></thead>
               <tbody id="results-tbody"></tbody>
             </table>
+          </div>
+          <div class="pag-row">
+            <button class="btn-ghost pag-btn" id="page-prev" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg>
+              Prev
+            </button>
+            <span class="pag-num" id="page-num">Page 1</span>
+            <button class="btn-ghost pag-btn" id="page-next" disabled>
+              Next
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+            </button>
           </div>
         </section>
       </div>

@@ -167,38 +167,92 @@ function renderSummary(s) {
   </div>`).join('');
 }
 
-// ── Render table ──────────────────────────────────────────────────────────
-function renderTable(results) {
+// ── Results table with pagination + delta arrows ──────────────────────────
+const PAGE_SIZE = 5;
+let currentPage = 0;
+
+// delta returns an ▲/▼ span; higherIsBetter=true for speed, false for latency.
+function delta(curr, prev, higherIsBetter) {
+  if (prev == null || curr == null) return '';
+  const diff = curr - prev;
+  // Ignore changes smaller than 2% of the previous value.
+  if (prev !== 0 && Math.abs(diff / prev) < 0.02) return '';
+  const up   = diff > 0;
+  const good = up === higherIsBetter;
+  return `<span class="delta ${up ? 'up' : 'dn'} ${good ? 'good' : 'bad'}">${up ? '▲' : '▼'}</span>`;
+}
+
+function renderTablePage(rows, compRow) {
   const tbody = document.getElementById('results-tbody');
   if (!tbody) return;
-  if (!results || results.length === 0) {
+  if (!rows || rows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No results yet. Run a test to get started.</td></tr>';
     return;
   }
   const srcClass = s => ({ manual: 'src-manual', scheduled: 'src-scheduled', api: 'src-api' }[s] || '');
-  tbody.innerHTML = results.map(r => `<tr>
-    <td>${esc(new Date(r.timestamp).toLocaleString())}</td>
-    <td>${fmt(r.download_mbps)} <span style="color:var(--t3);font-size:.7em">Mbps</span></td>
-    <td>${fmt(r.upload_mbps)} <span style="color:var(--t3);font-size:.7em">Mbps</span></td>
-    <td>${fmt(r.ping_ms)} <span style="color:var(--t3);font-size:.7em">ms</span></td>
-    <td>${fmt(r.jitter_ms)} <span style="color:var(--t3);font-size:.7em">ms</span></td>
-    <td>${esc(r.server_name)}</td>
-    <td><span class="src-badge ${srcClass(r.source)}">${esc(r.source)}</span></td>
-  </tr>`).join('');
+  tbody.innerHTML = rows.map((r, i) => {
+    // "previous" = the next item in time (older), which is rows[i+1] or compRow for the last row.
+    const prev = rows[i + 1] || compRow || null;
+    const dl   = delta(r.download_mbps, prev?.download_mbps, true);
+    const ul   = delta(r.upload_mbps,   prev?.upload_mbps,   true);
+    const pg   = delta(r.ping_ms,       prev?.ping_ms,       false);
+    const jt   = delta(r.jitter_ms,     prev?.jitter_ms,     false);
+    return `<tr>
+      <td>${esc(new Date(r.timestamp).toLocaleString())}</td>
+      <td class="num-cell">${fmt(r.download_mbps)}${dl} <span class="unit">Mbps</span></td>
+      <td class="num-cell">${fmt(r.upload_mbps)}${ul} <span class="unit">Mbps</span></td>
+      <td class="num-cell">${fmt(r.ping_ms)}${pg} <span class="unit">ms</span></td>
+      <td class="num-cell">${fmt(r.jitter_ms)}${jt} <span class="unit">ms</span></td>
+      <td>${esc(r.server_name)}</td>
+      <td><span class="src-badge ${srcClass(r.source)}">${esc(r.source)}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function updatePagination(page, hasNext, totalOnPage) {
+  const prevBtn  = document.getElementById('page-prev');
+  const nextBtn  = document.getElementById('page-next');
+  const pageNum  = document.getElementById('page-num');
+  const pagInfo  = document.getElementById('pag-info');
+  if (prevBtn) prevBtn.disabled = page === 0;
+  if (nextBtn) nextBtn.disabled = !hasNext;
+  if (pageNum) pageNum.textContent = `Page ${page + 1}`;
+  if (pagInfo && totalOnPage > 0) {
+    const from = page * PAGE_SIZE + 1;
+    const to   = from + totalOnPage - 1;
+    pagInfo.textContent = `${from}–${to}`;
+  } else if (pagInfo) {
+    pagInfo.textContent = '';
+  }
+}
+
+async function loadPage(page) {
+  const offset  = page * PAGE_SIZE;
+  // Fetch one extra so we know if there's a next page AND have a comparison row for the last entry.
+  const results = await fetch(`/api/results?limit=${PAGE_SIZE + 1}&offset=${offset}`)
+    .then(r => r.json()).catch(() => []);
+
+  const hasNext  = results.length > PAGE_SIZE;
+  const pageRows = results.slice(0, PAGE_SIZE);
+  const compRow  = results[PAGE_SIZE] || null; // older item for last-row delta
+
+  renderTablePage(pageRows, compRow);
+  updatePagination(page, hasNext, pageRows.length);
+  currentPage = page;
 }
 
 // ── Load all dashboard data ────────────────────────────────────────────────
-async function loadAll() {
-  const [latestRes, summaryRes, resultsRes] = await Promise.allSettled([
+async function loadAll(resetPage) {
+  if (resetPage) currentPage = 0;
+  const [latestRes, summaryRes, sparkRes] = await Promise.allSettled([
     fetch('/api/results/latest').then(r => r.ok ? r.json() : null),
     fetch('/api/summary?days=7').then(r => r.json()),
     fetch('/api/results?limit=25').then(r => r.json()),
   ]);
   renderLatest(latestRes.status === 'fulfilled' ? latestRes.value : null);
   renderSummary(summaryRes.status === 'fulfilled' ? summaryRes.value : null);
-  const results = resultsRes.status === 'fulfilled' ? resultsRes.value : [];
-  renderTable(results);
-  renderSparkline(results);
+  renderSparkline(sparkRes.status === 'fulfilled' ? sparkRes.value : []);
+  await loadPage(currentPage);
 }
 
 // ── Live progress helpers ─────────────────────────────────────────────────
@@ -289,7 +343,7 @@ async function runTest() {
       }
     }
 
-    await loadAll(); // refresh table, sparkline, summary
+    await loadAll(true); // reset to page 1 and refresh
     toast('Test complete', 'ok');
   } catch (e) {
     toast('Test failed: ' + e.message, 'err');
@@ -688,6 +742,14 @@ document.getElementById('ch-provider')?.addEventListener('change', e => switchPr
 // Close dialog on overlay click
 document.getElementById('channel-dialog')?.addEventListener('click', function(e) {
   if (e.target === this) closeDialog();
+});
+
+// ── Pagination listeners ──────────────────────────────────────────────────
+document.getElementById('page-prev')?.addEventListener('click', () => {
+  if (currentPage > 0) loadPage(currentPage - 1);
+});
+document.getElementById('page-next')?.addEventListener('click', () => {
+  loadPage(currentPage + 1);
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────
