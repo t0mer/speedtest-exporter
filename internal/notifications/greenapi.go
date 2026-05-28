@@ -33,7 +33,7 @@ func (s *greenAPISender) Send(ctx context.Context, message string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := safeHTTPClient().Do(req)
 	if err != nil {
 		// Do not wrap err directly — it contains the credential-bearing URL.
 		return fmt.Errorf("greenapi: send failed (network error)")

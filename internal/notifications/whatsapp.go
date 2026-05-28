@@ -30,7 +30,7 @@ func (s *whatsAppWebSender) Send(ctx context.Context, message string) error {
 		req.SetBasicAuth(s.cfg.Username, s.cfg.Password)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := safeHTTPClient().Do(req)
 	if err != nil {
 		// Do not wrap err directly — it may contain the BaseURL revealing internal topology.
 		return fmt.Errorf("whatsapp_web: send failed (network error)")
