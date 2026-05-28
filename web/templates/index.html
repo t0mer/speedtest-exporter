@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speedtest Exporter</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <h1>Speedtest Exporter</h1>
+    <span id="refresh-timer">Auto-refreshing in 60s</span>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Latest Result</h2>
+    <div id="latest-cards" class="cards"></div>
+  </section>
+  <section>
+    <h2>7-Day Summary</h2>
+    <div id="summary-cards" class="cards"></div>
+  </section>
+  <section>
+    <div class="section-header">
+      <h2>Recent Results</h2>
+      <button id="run-btn">Run Test Now</button>
+    </div>
+    <table id="results-table">
+      <thead>
+        <tr>
+          <th>Time</th><th>Download</th><th>Upload</th>
+          <th>Ping</th><th>Jitter</th><th>Server</th><th>Source</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
