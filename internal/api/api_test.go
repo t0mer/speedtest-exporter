@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,7 @@ func buildTestServer(t *testing.T) http.Handler {
 	svc := service.New(db, &alwaysOKRunner{}, metrics.New(), notify.New(notify.ThresholdConfig{}, nil))
 	cfg := config.Default()
 	cfg.Server.EnableUI = false
-	return api.NewServer(svc, &cfg)
+	return api.NewServer(svc, &cfg, "speedtest")
 }
 
 func TestHealthz(t *testing.T) {
@@ -90,4 +91,56 @@ func TestMetricsEndpoint(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "speedtest_tests_total")
+}
+
+func TestGetSettingsDefault(t *testing.T) {
+	srv := buildTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var s model.Settings
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&s))
+	assert.Equal(t, "go", s.Engine) // default engine
+}
+
+func TestPutSettings(t *testing.T) {
+	srv := buildTestServer(t)
+
+	body := `{"engine":"go","schedule":"","min_download_mbps":50,"min_upload_mbps":10,"max_ping_ms":200,"max_jitter_ms":0,"max_packet_loss_ratio":0,"cooldown_minutes":30,"webhooks":[]}`
+	req := httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Verify persisted
+	getReq := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	getRec := httptest.NewRecorder()
+	srv.ServeHTTP(getRec, getReq)
+	var s model.Settings
+	require.NoError(t, json.NewDecoder(getRec.Body).Decode(&s))
+	assert.InDelta(t, 50.0, s.MinDownloadMbps, 0.001)
+}
+
+func TestPutSettingsBadEngine(t *testing.T) {
+	srv := buildTestServer(t)
+	body := `{"engine":"invalid","schedule":""}`
+	req := httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPutSettingsBadSchedule(t *testing.T) {
+	srv := buildTestServer(t)
+	body := `{"engine":"go","schedule":"not a valid spec"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
