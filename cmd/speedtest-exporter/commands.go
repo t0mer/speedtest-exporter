@@ -104,7 +104,7 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
-			srv := api.NewServer(svc, cfg)
+			srv := api.NewServer(svc, cfg, cfg.OoklaPath)
 			errCh := make(chan error, 1)
 			go func() { errCh <- srv.ListenAndServe() }()
 

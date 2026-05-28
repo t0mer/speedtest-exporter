@@ -7,25 +7,30 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/t0mer/speedtest-exporter/internal/config"
+	"github.com/t0mer/speedtest-exporter/internal/scheduler"
 	"github.com/t0mer/speedtest-exporter/internal/service"
 	"github.com/t0mer/speedtest-exporter/web"
 )
 
 // Server is the HTTP API server.
 type Server struct {
-	service *service.Service
-	cfg     *config.Config
-	router  *chi.Mux
+	service   *service.Service
+	cfg       *config.Config
+	ooklaPath string
+	router    *chi.Mux
+	schedMu   sync.Mutex
+	sched     *scheduler.Scheduler
 }
 
 // NewServer builds and wires up the chi router with all routes.
-func NewServer(svc *service.Service, cfg *config.Config) *Server {
-	s := &Server{service: svc, cfg: cfg, router: chi.NewRouter()}
+func NewServer(svc *service.Service, cfg *config.Config, ooklaPath string) *Server {
+	s := &Server{service: svc, cfg: cfg, ooklaPath: ooklaPath, router: chi.NewRouter()}
 	s.router.Use(middleware.RealIP)
 	s.router.Use(middleware.Logger)
 	s.router.Use(middleware.Timeout(time.Duration(cfg.Server.WriteTimeout) * time.Second))
@@ -41,6 +46,8 @@ func NewServer(svc *service.Service, cfg *config.Config) *Server {
 		r.Get("/results/{id}", s.handleGetResult)
 		r.Get("/summary", s.handleSummary)
 		r.Get("/compare", s.handleCompare)
+		r.Get("/settings", s.handleGetSettings)
+		r.Put("/settings", s.handlePutSettings)
 	})
 
 	if cfg.Server.EnableUI {
@@ -54,6 +61,37 @@ func NewServer(svc *service.Service, cfg *config.Config) *Server {
 	}
 
 	return s
+}
+
+// SetSchedule stops any running scheduler and starts a new one with spec.
+// Passing an empty spec stops the scheduler without starting a new one.
+func (s *Server) SetSchedule(spec string) error {
+	s.schedMu.Lock()
+	defer s.schedMu.Unlock()
+	if s.sched != nil {
+		s.sched.Stop()
+		s.sched = nil
+	}
+	if spec == "" {
+		return nil
+	}
+	sched, err := scheduler.New(s.service, spec)
+	if err != nil {
+		return fmt.Errorf("start scheduler %q: %w", spec, err)
+	}
+	sched.Start()
+	s.sched = sched
+	return nil
+}
+
+// StopScheduler stops the running scheduler, if any.
+func (s *Server) StopScheduler() {
+	s.schedMu.Lock()
+	defer s.schedMu.Unlock()
+	if s.sched != nil {
+		s.sched.Stop()
+		s.sched = nil
+	}
 }
 
 // ServeHTTP implements http.Handler, used in tests.
