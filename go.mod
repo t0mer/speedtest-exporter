@@ -3,7 +3,9 @@ module github.com/t0mer/speedtest-exporter
 go 1.22
 
 require (
+	github.com/go-chi/chi/v5 v5.2.1
 	github.com/prometheus/client_golang v1.20.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/showwin/speedtest-go v1.7.9
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0
@@ -31,7 +33,6 @@ require (
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect

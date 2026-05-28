@@ -76,6 +76,15 @@ func New() *Metrics {
 		m.packetLoss, m.lastTimestamp, m.serverInfo,
 		m.testsTotal, m.testDuration, m.breachesTotal,
 	)
+
+	// Pre-declare well-known label combinations so counters appear in /metrics
+	// output even before the first test runs.
+	for _, src := range []string{"manual", "scheduled", "api"} {
+		for _, outcome := range []string{"started", "success", "error"} {
+			m.testsTotal.WithLabelValues(src, outcome)
+		}
+	}
+
 	return m
 }
 
