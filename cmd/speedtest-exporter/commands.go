@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -116,8 +118,25 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 	}
 }
 
+// configureLogging sets the default slog handler to the requested level.
+func configureLogging(level string) {
+	var l slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		l = slog.LevelDebug
+	case "warning", "warn":
+		l = slog.LevelWarn
+	case "error":
+		l = slog.LevelError
+	default:
+		l = slog.LevelInfo
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: l})))
+}
+
 // buildService assembles all dependencies from cfg.
 func buildService(cfg *config.Config) (*service.Service, error) {
+	configureLogging(cfg.LogLevel)
 	db, err := database.Open(cfg.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("database: %w", err)
