@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,7 +75,10 @@ func (d *DB) Save(ctx context.Context, r *model.Result) error {
 	if err != nil {
 		return fmt.Errorf("insert result: %w", err)
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("last insert id: %w", err)
+	}
 	r.ID = id
 	return nil
 }
@@ -129,7 +133,7 @@ func (d *DB) List(ctx context.Context, opts ListOptions) ([]model.Result, error)
 		return nil, fmt.Errorf("list results: %w", err)
 	}
 	defer rows.Close()
-	var results []model.Result
+	results := make([]model.Result, 0)
 	for rows.Next() {
 		r, err := scanRow(rows.Scan)
 		if err != nil {
@@ -187,7 +191,7 @@ func scanRow(scan func(...any) error) (*model.Result, error) {
 		&r.DownloadMbps, &r.UploadMbps, &r.PingMs, &r.JitterMs,
 		&r.PacketLoss, &r.ServerName, &r.ServerID, &r.ISP, &r.ExternalIP, &r.DurationSec,
 	)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
