@@ -107,12 +107,20 @@ func (s *Server) handleCompare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a, err := s.service.DB().Get(r.Context(), aID)
-	if err != nil || a == nil {
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if a == nil {
 		writeError(w, http.StatusNotFound, "result a not found")
 		return
 	}
 	b, err := s.service.DB().Get(r.Context(), bID)
-	if err != nil || b == nil {
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if b == nil {
 		writeError(w, http.StatusNotFound, "result b not found")
 		return
 	}

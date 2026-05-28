@@ -28,8 +28,8 @@ func NewServer(svc *service.Service, cfg *config.Config) *Server {
 	s := &Server{service: svc, cfg: cfg, router: chi.NewRouter()}
 	s.router.Use(middleware.RealIP)
 	s.router.Use(middleware.Logger)
-	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.Timeout(time.Duration(cfg.Server.WriteTimeout) * time.Second))
+	s.router.Use(middleware.Recoverer)
 
 	s.router.Get("/healthz", s.handleHealth)
 	s.router.Handle("/metrics", svc.Metrics().Handler())
