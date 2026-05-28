@@ -1,0 +1,39 @@
+# speedtest-exporter configuration
+# Environment variable override: SPEEDTEST_<KEY> (nesting uses _)
+# Example: SPEEDTEST_SERVER_PORT=9090
+
+# Backend engine: "go" (no binary needed) or "ookla" (requires speedtest CLI)
+engine: go
+
+# Path to the Ookla speedtest CLI binary (only used when engine=ookla)
+ookla_path: speedtest
+
+# Directory for SQLite database
+data_dir: ./data
+
+# Log level: debug, info, warning, error
+log_level: info
+
+# Cron schedule for automatic tests (robfig/cron syntax, empty to disable)
+# Examples: "@every 1h", "0 */6 * * *", "@hourly"
+schedule: "@every 1h"
+
+server:
+  host: 0.0.0.0
+  port: 9090
+  read_timeout: 10     # seconds
+  write_timeout: 120   # seconds — sized for a full test (~30-60s)
+  enable_ui: true
+
+thresholds:
+  min_download_mbps: 0    # 0 = disabled
+  min_upload_mbps: 0
+  max_ping_ms: 0
+  max_jitter_ms: 0
+  max_packet_loss_ratio: 0
+  cooldown_minutes: 30    # minimum minutes between breach notifications
+
+# Webhook URLs to POST breach notifications to (JSON body)
+webhooks: []
+# webhooks:
+#   - https://hooks.example.com/speedtest
