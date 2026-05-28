@@ -63,7 +63,10 @@ func Open(dir string) (*DB, error) {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
 	dbPath := filepath.Join(dir, "results.db")
-	db, err := sql.Open("sqlite", dbPath)
+	// Use URI format: _pragma=busy_timeout prevents SQLITE_BUSY under brief contention;
+	// mode=rwc explicitly requests read-write-create, avoiding read-only fallback.
+	dsn := "file:" + dbPath + "?_pragma=busy_timeout(10000)&mode=rwc"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
