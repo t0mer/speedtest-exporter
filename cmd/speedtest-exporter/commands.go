@@ -106,7 +106,7 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 				schedule = dbSettings.Schedule
 			}
 
-			srv := api.NewServer(svc, cfg, cfg.OoklaPath)
+			srv := api.NewServer(svc, cfg, cfg.OoklaPath, nil)
 			if schedule != "" {
 				if err := srv.SetSchedule(schedule); err != nil {
 					return fmt.Errorf("scheduler: %w", err)

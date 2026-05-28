@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/t0mer/speedtest-exporter/internal/config"
+	"github.com/t0mer/speedtest-exporter/internal/notifications"
 	"github.com/t0mer/speedtest-exporter/internal/scheduler"
 	"github.com/t0mer/speedtest-exporter/internal/service"
 	"github.com/t0mer/speedtest-exporter/web"
@@ -20,17 +21,18 @@ import (
 
 // Server is the HTTP API server.
 type Server struct {
-	service   *service.Service
-	cfg       *config.Config
-	ooklaPath string
-	router    *chi.Mux
-	schedMu   sync.Mutex
-	sched     *scheduler.Scheduler
+	service    *service.Service
+	cfg        *config.Config
+	ooklaPath  string
+	router     *chi.Mux
+	schedMu    sync.Mutex
+	sched      *scheduler.Scheduler
+	notifStore *notifications.Store // may be nil
 }
 
 // NewServer builds and wires up the chi router with all routes.
-func NewServer(svc *service.Service, cfg *config.Config, ooklaPath string) *Server {
-	s := &Server{service: svc, cfg: cfg, ooklaPath: ooklaPath, router: chi.NewRouter()}
+func NewServer(svc *service.Service, cfg *config.Config, ooklaPath string, notifStore *notifications.Store) *Server {
+	s := &Server{service: svc, cfg: cfg, ooklaPath: ooklaPath, notifStore: notifStore, router: chi.NewRouter()}
 	s.router.Use(middleware.RealIP)
 	s.router.Use(middleware.Logger)
 	s.router.Use(middleware.Timeout(time.Duration(cfg.Server.WriteTimeout) * time.Second))
@@ -48,6 +50,13 @@ func NewServer(svc *service.Service, cfg *config.Config, ooklaPath string) *Serv
 		r.Get("/compare", s.handleCompare)
 		r.Get("/settings", s.handleGetSettings)
 		r.Put("/settings", s.handlePutSettings)
+		r.Route("/notifications", func(r chi.Router) {
+			r.Get("/", s.handleListChannels)
+			r.Post("/", s.handleCreateChannel)
+			r.Put("/{id}", s.handleUpdateChannel)
+			r.Delete("/{id}", s.handleDeleteChannel)
+			r.Post("/test", s.handleTestChannel)
+		})
 	})
 
 	if cfg.Server.EnableUI {

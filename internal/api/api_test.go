@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/t0mer/speedtest-exporter/internal/database"
 	"github.com/t0mer/speedtest-exporter/internal/metrics"
 	"github.com/t0mer/speedtest-exporter/internal/model"
+	"github.com/t0mer/speedtest-exporter/internal/notifications"
 	"github.com/t0mer/speedtest-exporter/internal/notify"
 	"github.com/t0mer/speedtest-exporter/internal/service"
 )
@@ -35,7 +37,22 @@ func buildTestServer(t *testing.T) http.Handler {
 	svc := service.New(db, &alwaysOKRunner{}, metrics.New(), notify.New(notify.ThresholdConfig{}, nil))
 	cfg := config.Default()
 	cfg.Server.EnableUI = false
-	return api.NewServer(svc, &cfg, "speedtest")
+	return api.NewServer(svc, &cfg, "speedtest", nil)
+}
+
+func buildTestServerWithNotif(t *testing.T) http.Handler {
+	t.Helper()
+	db, err := database.Open(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	key := make([]byte, 32)
+	store := notifications.NewStore(db.SQL(), key)
+
+	svc := service.New(db, &alwaysOKRunner{}, metrics.New(), notify.New(notify.ThresholdConfig{}, nil))
+	cfg := config.Default()
+	cfg.Server.EnableUI = false
+	return api.NewServer(svc, &cfg, "speedtest", store)
 }
 
 func TestHealthz(t *testing.T) {
@@ -143,4 +160,58 @@ func TestPutSettingsBadSchedule(t *testing.T) {
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestListChannelsEmpty(t *testing.T) {
+	srv := buildTestServerWithNotif(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var channels []notifications.ChannelView
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&channels))
+	assert.Empty(t, channels)
+}
+
+func TestCreateChannel(t *testing.T) {
+	srv := buildTestServerWithNotif(t)
+	body := `{"name":"Slack","provider":"shoutrrr","config":{"url":"slack://token@channel"},"enabled":true,"notify_on_success":true,"notify_on_failure":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	var ch notifications.ChannelView
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&ch))
+	assert.Positive(t, ch.ID)
+	assert.Equal(t, "Slack", ch.Name)
+	assert.NotContains(t, string(ch.Config), "token@channel")
+}
+
+func TestCreateChannelBadProvider(t *testing.T) {
+	srv := buildTestServerWithNotif(t)
+	body := `{"name":"X","provider":"invalid","config":{},"enabled":true,"notify_on_success":true,"notify_on_failure":false}`
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestDeleteChannel(t *testing.T) {
+	srv := buildTestServerWithNotif(t)
+
+	body := `{"name":"X","provider":"shoutrrr","config":{"url":"slack://t@c"},"enabled":true,"notify_on_success":false,"notify_on_failure":true}`
+	createReq := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	srv.ServeHTTP(createRec, createReq)
+	var ch notifications.ChannelView
+	json.NewDecoder(createRec.Body).Decode(&ch)
+
+	delReq := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/notifications/%d", ch.ID), nil)
+	delRec := httptest.NewRecorder()
+	srv.ServeHTTP(delRec, delReq)
+	assert.Equal(t, http.StatusNoContent, delRec.Code)
 }
