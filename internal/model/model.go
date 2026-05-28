@@ -36,3 +36,18 @@ type Result struct {
 	ExternalIP   string    `json:"external_ip"`
 	DurationSec  float64   `json:"duration_sec"`
 }
+
+// Settings holds the runtime-editable configuration stored in the database.
+// These fields override their equivalents from the YAML/env config at startup
+// and take effect immediately when saved via the API.
+type Settings struct {
+	Engine             string   `json:"engine"`
+	Schedule           string   `json:"schedule"`
+	MinDownloadMbps    float64  `json:"min_download_mbps"`
+	MinUploadMbps      float64  `json:"min_upload_mbps"`
+	MaxPingMs          float64  `json:"max_ping_ms"`
+	MaxJitterMs        float64  `json:"max_jitter_ms"`
+	MaxPacketLossRatio float64  `json:"max_packet_loss_ratio"`
+	CooldownMinutes    int      `json:"cooldown_minutes"`
+	Webhooks           []string `json:"webhooks"`
+}
