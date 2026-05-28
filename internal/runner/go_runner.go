@@ -22,9 +22,9 @@ func (r *GoRunner) Engine() model.Engine { return model.EngineGo }
 func (r *GoRunner) Run(ctx context.Context) (*model.Result, error) {
 	client := speedtest.New()
 
-	user, _ := client.FetchUserInfo()
+	user, _ := client.FetchUserInfoContext(ctx)
 
-	serverList, err := client.FetchServers()
+	serverList, err := client.FetchServerListContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch servers: %w", err)
 	}
@@ -48,13 +48,19 @@ func (r *GoRunner) Run(ctx context.Context) (*model.Result, error) {
 		return nil, fmt.Errorf("upload test: %w", err)
 	}
 
+	// PacketLoss.Loss() returns a ratio [0,1]; -1 means unavailable (treat as 0).
+	pl := server.PacketLoss.Loss()
+	if pl < 0 {
+		pl = 0
+	}
+
 	result := &model.Result{
 		Engine:       model.EngineGo,
 		DownloadMbps: float64(server.DLSpeed.Mbps()),
 		UploadMbps:   float64(server.ULSpeed.Mbps()),
 		PingMs:       server.Latency.Seconds() * 1000,
 		JitterMs:     server.Jitter.Seconds() * 1000,
-		PacketLoss:   server.PacketLoss.Loss() / 100,
+		PacketLoss:   pl,
 		ServerName:   server.Name,
 		ServerID:     server.ID,
 	}
