@@ -88,11 +88,14 @@ func (s *Service) Metrics() *metrics.Metrics { return s.metrics }
 // Close shuts down the database connection.
 func (s *Service) Close() error { return s.db.Close() }
 
-// SetEngine swaps the active runner to match the given engine and ooklaPath.
-func (s *Service) SetEngine(engine model.Engine, ooklaPath string) {
+// SetEngine swaps the active runner. For the Go engine, preferredServerID is
+// tried first; on failure the runner falls back to the nearest server.
+func (s *Service) SetEngine(engine model.Engine, ooklaPath, preferredServerID string) {
 	var r runner.Runner
 	if engine == model.EngineOokla {
 		r = runner.NewOoklaRunner(ooklaPath)
+	} else if preferredServerID != "" {
+		r = runner.NewGoRunnerWithPreferredServer(preferredServerID)
 	} else {
 		r = runner.NewGoRunner()
 	}
@@ -117,5 +120,5 @@ func (s *Service) Apply(settings *model.Settings, ooklaPath string) {
 		MaxPacketLoss:   settings.MaxPacketLossRatio,
 		CooldownMinutes: settings.CooldownMinutes,
 	}, settings.Webhooks)
-	s.SetEngine(model.Engine(settings.Engine), ooklaPath)
+	s.SetEngine(model.Engine(settings.Engine), ooklaPath, settings.PreferredServerID)
 }

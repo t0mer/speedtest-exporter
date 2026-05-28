@@ -74,6 +74,8 @@ func (s *Server) defaultSettings() *model.Settings {
 		MaxJitterMs:        s.cfg.Thresholds.MaxJitterMs,
 		MaxPacketLossRatio: s.cfg.Thresholds.MaxPacketLossRatio,
 		CooldownMinutes:    s.cfg.Thresholds.CooldownMinutes,
-		Webhooks:           webhooks,
+		Webhooks:            webhooks,
+		PreferredServerID:   "",
+		PreferredServerName: "",
 	}
 }

@@ -50,6 +50,7 @@ func NewServer(svc *service.Service, cfg *config.Config, ooklaPath string, notif
 		r.Get("/compare", s.handleCompare)
 		r.Get("/settings", s.handleGetSettings)
 		r.Put("/settings", s.handlePutSettings)
+		r.Get("/servers", s.handleListServers)
 		r.Route("/notifications", func(r chi.Router) {
 			r.Get("/", s.handleListChannels)
 			r.Post("/", s.handleCreateChannel)

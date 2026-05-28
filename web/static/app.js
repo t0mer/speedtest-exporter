@@ -253,6 +253,29 @@ document.querySelectorAll('[data-tab]').forEach(btn => {
 // ═══════════════════════════════════════════════════════════
 // SETTINGS
 // ═══════════════════════════════════════════════════════════
+// ── Preferred-server display helpers ─────────────────────────────────────
+function setPreferredServerDisplay(id, name) {
+  const label  = document.getElementById('pref-server-label');
+  const chip   = document.getElementById('pref-server-id-chip');
+  const clearB = document.getElementById('clear-server-btn');
+  const hidId  = document.getElementById('pref-server-id');
+  const hidNm  = document.getElementById('pref-server-name');
+  if (label)  label.textContent  = id ? esc(name || id) : 'Nearest available';
+  if (chip)  { chip.textContent = id ? '#' + id : ''; chip.style.display = id ? '' : 'none'; }
+  if (clearB)  clearB.style.display = id ? '' : 'none';
+  if (hidId)   hidId.value = id || '';
+  if (hidNm)   hidNm.value = name || '';
+}
+
+// Show/hide preferred server field based on engine
+function updatePreferredServerVisibility() {
+  const engine = document.getElementById('cfg-engine')?.value;
+  const field  = document.getElementById('preferred-server-field');
+  if (field) field.classList.toggle('pref-server-hidden', engine === 'ookla');
+}
+document.getElementById('cfg-engine')?.addEventListener('change', updatePreferredServerVisibility);
+
+// ── Settings load / save ──────────────────────────────────────────────────
 async function loadSettings() {
   try {
     const s = await fetch('/api/settings').then(r => r.json());
@@ -268,6 +291,8 @@ async function loadSettings() {
     n('cfg-max-packet-loss',  s.max_packet_loss_ratio);
     n('cfg-cooldown',         s.cooldown_minutes);
     v('cfg-webhooks', (s.webhooks || []).join('\n'));
+    setPreferredServerDisplay(s.preferred_server_id || '', s.preferred_server_name || '');
+    updatePreferredServerVisibility();
   } catch { /* already loaded */ }
 }
 
@@ -289,6 +314,8 @@ async function saveSettings() {
     max_packet_loss_ratio: parseFloat(g('cfg-max-packet-loss')?.value) || 0,
     cooldown_minutes:      parseInt(g('cfg-cooldown')?.value) || 0,
     webhooks: (g('cfg-webhooks')?.value || '').split('\n').map(u => u.trim()).filter(Boolean),
+    preferred_server_id:   g('pref-server-id')?.value || '',
+    preferred_server_name: g('pref-server-name')?.value || '',
   };
   try {
     const res  = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -312,6 +339,88 @@ async function saveSettings() {
   }
 }
 document.getElementById('save-btn')?.addEventListener('click', saveSettings);
+
+// ── Server picker ─────────────────────────────────────────────────────────
+let allServers = null; // cached after first fetch
+
+async function openServerPicker() {
+  document.getElementById('server-picker-dialog').style.display = '';
+  document.getElementById('server-search').value = '';
+  renderServerList(null); // show loading
+  try {
+    if (!allServers) {
+      allServers = await fetch('/api/servers').then(r => r.json());
+    }
+    renderServerList(allServers);
+  } catch (e) {
+    const list = document.getElementById('servers-list');
+    if (list) list.innerHTML = `<div class="servers-loading" style="color:var(--red)">Failed to load servers: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderServerList(servers) {
+  const list = document.getElementById('servers-list');
+  if (!list) return;
+  if (!servers) {
+    list.innerHTML = '<div class="servers-loading"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Fetching nearby servers…</div>';
+    return;
+  }
+  if (servers.length === 0) {
+    list.innerHTML = '<div class="servers-loading">No servers found.</div>';
+    return;
+  }
+  const currentId = document.getElementById('pref-server-id')?.value || '';
+  const q = (document.getElementById('server-search')?.value || '').toLowerCase();
+  const filtered = q
+    ? servers.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.country.toLowerCase().includes(q) ||
+        s.sponsor.toLowerCase().includes(q) ||
+        s.id.includes(q))
+    : servers;
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="servers-loading">No servers match your search.</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(s => {
+    const dist = s.distance_km > 0 ? `${s.distance_km.toFixed(0)} km` : '';
+    const sel  = s.id === currentId ? ' selected' : '';
+    return `<div class="server-row${sel}" data-id="${esc(s.id)}" data-name="${esc(s.name + ', ' + s.country)}">
+      <div class="server-row-info">
+        <div class="server-row-name">${esc(s.name)}, ${esc(s.country)}</div>
+        <div class="server-row-sponsor">${esc(s.sponsor)}</div>
+      </div>
+      <div class="server-row-meta">
+        <span class="server-row-id">#${esc(s.id)}</span>
+        ${dist ? `<span class="server-row-dist">${esc(dist)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.server-row').forEach(row => {
+    row.addEventListener('click', () => {
+      setPreferredServerDisplay(row.dataset.id, row.dataset.name);
+      document.getElementById('server-picker-dialog').style.display = 'none';
+    });
+  });
+}
+
+function closeServerPicker() {
+  document.getElementById('server-picker-dialog').style.display = 'none';
+}
+
+document.getElementById('browse-servers-btn')?.addEventListener('click', openServerPicker);
+document.getElementById('clear-server-btn')?.addEventListener('click', () => setPreferredServerDisplay('', ''));
+document.getElementById('close-server-picker')?.addEventListener('click', closeServerPicker);
+document.getElementById('cancel-server-picker')?.addEventListener('click', closeServerPicker);
+document.getElementById('server-picker-dialog')?.addEventListener('click', function(e) {
+  if (e.target === this) closeServerPicker();
+});
+document.getElementById('server-search')?.addEventListener('input', () => {
+  if (allServers) renderServerList(allServers);
+});
 
 // ═══════════════════════════════════════════════════════════
 // NOTIFICATIONS
