@@ -11,6 +11,7 @@ import (
 	"github.com/t0mer/speedtest-exporter/internal/database"
 	"github.com/t0mer/speedtest-exporter/internal/metrics"
 	"github.com/t0mer/speedtest-exporter/internal/model"
+	"github.com/t0mer/speedtest-exporter/internal/notifications"
 	"github.com/t0mer/speedtest-exporter/internal/notify"
 	"github.com/t0mer/speedtest-exporter/internal/runner"
 )
@@ -22,6 +23,7 @@ type Service struct {
 	runner   runner.Runner
 	metrics  *metrics.Metrics
 	notifier *notify.Notifier
+	notifMgr *notifications.Manager // optional; nil disables channel notifications
 }
 
 // New assembles a Service from its dependencies.
@@ -42,6 +44,9 @@ func (s *Service) Run(ctx context.Context, source model.Source) (*model.Result, 
 	result, err := r.Run(ctx)
 	if err != nil {
 		s.metrics.IncrTests(string(source), "error")
+		if s.notifMgr != nil {
+			go s.notifMgr.NotifyFailure(context.Background(), err)
+		}
 		return nil, fmt.Errorf("run speed test: %w", err)
 	}
 
@@ -64,6 +69,11 @@ func (s *Service) Run(ctx context.Context, source model.Source) (*model.Result, 
 
 	for _, b := range s.notifier.Evaluate(result) {
 		s.metrics.IncrBreaches(b.Metric)
+	}
+
+	// Fire channel notifications asynchronously — must not block the test pipeline.
+	if s.notifMgr != nil {
+		go s.notifMgr.NotifySuccess(context.Background(), result)
 	}
 
 	return result, nil
@@ -89,6 +99,11 @@ func (s *Service) SetEngine(engine model.Engine, ooklaPath string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.runner = r
+}
+
+// SetNotificationManager wires the notification manager used after each test run.
+func (s *Service) SetNotificationManager(mgr *notifications.Manager) {
+	s.notifMgr = mgr
 }
 
 // Apply applies DB-persisted settings to the live service components.
