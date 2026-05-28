@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/t0mer/speedtest-exporter/internal/database"
@@ -17,6 +18,7 @@ import (
 // Service orchestrates: run → persist → metrics → evaluate → notify.
 type Service struct {
 	db       *database.DB
+	mu       sync.RWMutex
 	runner   runner.Runner
 	metrics  *metrics.Metrics
 	notifier *notify.Notifier
@@ -33,14 +35,18 @@ func (s *Service) Run(ctx context.Context, source model.Source) (*model.Result, 
 	start := time.Now()
 	s.metrics.IncrTests(string(source), "started")
 
-	result, err := s.runner.Run(ctx)
+	s.mu.RLock()
+	r := s.runner
+	s.mu.RUnlock()
+
+	result, err := r.Run(ctx)
 	if err != nil {
 		s.metrics.IncrTests(string(source), "error")
 		return nil, fmt.Errorf("run speed test: %w", err)
 	}
 
 	result.Source = source
-	result.Engine = s.runner.Engine()
+	result.Engine = r.Engine()
 	result.Timestamp = time.Now().UTC()
 	result.DurationSec = time.Since(start).Seconds()
 
@@ -71,3 +77,30 @@ func (s *Service) Metrics() *metrics.Metrics { return s.metrics }
 
 // Close shuts down the database connection.
 func (s *Service) Close() error { return s.db.Close() }
+
+// SetEngine swaps the active runner to match the given engine and ooklaPath.
+func (s *Service) SetEngine(engine model.Engine, ooklaPath string) {
+	var r runner.Runner
+	if engine == model.EngineOokla {
+		r = runner.NewOoklaRunner(ooklaPath)
+	} else {
+		r = runner.NewGoRunner()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runner = r
+}
+
+// Apply applies DB-persisted settings to the live service components.
+// It hot-swaps the runner and updates the notifier without a restart.
+func (s *Service) Apply(settings *model.Settings, ooklaPath string) {
+	s.notifier.Update(notify.ThresholdConfig{
+		MinDownloadMbps: settings.MinDownloadMbps,
+		MinUploadMbps:   settings.MinUploadMbps,
+		MaxPingMs:       settings.MaxPingMs,
+		MaxJitterMs:     settings.MaxJitterMs,
+		MaxPacketLoss:   settings.MaxPacketLossRatio,
+		CooldownMinutes: settings.CooldownMinutes,
+	}, settings.Webhooks)
+	s.SetEngine(model.Engine(settings.Engine), ooklaPath)
+}
