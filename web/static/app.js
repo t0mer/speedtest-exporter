@@ -163,8 +163,176 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const tab = btn.dataset.tab;
-    document.getElementById('dashboard-tab').style.display = tab === 'dashboard' ? '' : 'none';
-    document.getElementById('settings-tab').style.display  = tab === 'settings'  ? '' : 'none';
-    if (tab === 'settings') loadSettings();
+    document.getElementById('dashboard-tab').style.display     = tab === 'dashboard'     ? '' : 'none';
+    document.getElementById('settings-tab').style.display      = tab === 'settings'      ? '' : 'none';
+    document.getElementById('notifications-tab').style.display = tab === 'notifications' ? '' : 'none';
+    if (tab === 'settings')      loadSettings();
+    if (tab === 'notifications') loadChannels();
   });
 });
+
+// ── Notifications tab ─────────────────────────────────────────────────────
+
+let editingChannelId = null;
+
+async function loadChannels() {
+  const channels = await fetch('/api/notifications').then(r => r.json());
+  const list = document.getElementById('channels-list');
+  if (!channels || channels.length === 0) {
+    list.innerHTML = '<p class="no-data">No channels configured yet. Click &quot;+ Add Channel&quot; to add one.</p>';
+    return;
+  }
+  // Build channel rows with data- attributes; wire click handlers to avoid
+  // inline onclick string injection.
+  list.innerHTML = channels.map(ch => `<div class="channel-row" data-id="${ch.id}" data-name="${esc(ch.name)}">
+    <span class="ch-name">${esc(ch.name)}</span>
+    <span class="ch-provider">${esc(ch.provider)}</span>
+    <span class="ch-badge ${ch.enabled ? 'enabled' : 'disabled'}">${ch.enabled ? 'On' : 'Off'}</span>
+    <div class="ch-actions">
+      <button class="btn-secondary ch-edit-btn">Edit</button>
+      <button class="btn-secondary ch-delete-btn">Delete</button>
+    </div>
+  </div>`).join('');
+
+  // Wire edit/delete handlers via addEventListener — no inline string interpolation.
+  list.querySelectorAll('.ch-edit-btn').forEach(btn => {
+    const row = btn.closest('.channel-row');
+    btn.addEventListener('click', () => openEditDialog(Number(row.dataset.id)));
+  });
+  list.querySelectorAll('.ch-delete-btn').forEach(btn => {
+    const row = btn.closest('.channel-row');
+    btn.addEventListener('click', () => deleteChannel(Number(row.dataset.id), row.dataset.name));
+  });
+}
+
+function getProviderConfig() {
+  const p = document.getElementById('ch-provider').value;
+  if (p === 'shoutrrr') {
+    return { url: document.getElementById('ch-shoutrrr-url').value.trim() };
+  }
+  if (p === 'greenapi') {
+    return {
+      instance_id: document.getElementById('ch-ga-instance').value.trim(),
+      token:       document.getElementById('ch-ga-token').value,
+      phone:       document.getElementById('ch-ga-phone').value.trim(),
+      api_url:     document.getElementById('ch-ga-apiurl').value.trim(),
+    };
+  }
+  return {
+    base_url: document.getElementById('ch-wa-baseurl').value.trim(),
+    phone:    document.getElementById('ch-wa-phone').value.trim(),
+    username: document.getElementById('ch-wa-user').value.trim(),
+    password: document.getElementById('ch-wa-pass').value,
+  };
+}
+
+function setProviderConfig(provider, config) {
+  if (!config) return;
+  if (provider === 'shoutrrr') {
+    document.getElementById('ch-shoutrrr-url').value = config.url || '';
+  } else if (provider === 'greenapi') {
+    document.getElementById('ch-ga-instance').value = config.instance_id || '';
+    document.getElementById('ch-ga-token').value    = config.token || '';
+    document.getElementById('ch-ga-phone').value    = config.phone || '';
+    document.getElementById('ch-ga-apiurl').value   = config.api_url || '';
+  } else if (provider === 'whatsapp_web') {
+    document.getElementById('ch-wa-baseurl').value  = config.base_url || '';
+    document.getElementById('ch-wa-phone').value    = config.phone || '';
+    document.getElementById('ch-wa-user').value     = config.username || '';
+    document.getElementById('ch-wa-pass').value     = config.password || '';
+  }
+}
+
+function switchProviderFields(provider) {
+  document.querySelectorAll('.provider-fields').forEach(el => el.style.display = 'none');
+  const el = document.getElementById('fields-' + provider);
+  if (el) el.style.display = '';
+}
+
+function openAddDialog() {
+  editingChannelId = null;
+  document.getElementById('dialog-title').textContent = 'Add Channel';
+  document.getElementById('ch-name').value = '';
+  document.getElementById('ch-provider').value = 'shoutrrr';
+  switchProviderFields('shoutrrr');
+  ['ch-shoutrrr-url','ch-ga-instance','ch-ga-token','ch-ga-phone','ch-ga-apiurl','ch-wa-baseurl','ch-wa-phone','ch-wa-user','ch-wa-pass'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('ch-enabled').checked    = true;
+  document.getElementById('ch-on-success').checked = true;
+  document.getElementById('ch-on-failure').checked = true;
+  document.getElementById('ch-test-msg').textContent = '';
+  document.getElementById('channel-dialog').style.display = '';
+}
+
+async function openEditDialog(id) {
+  const channels = await fetch('/api/notifications').then(r => r.json());
+  const ch = channels.find(c => c.id === id);
+  if (!ch) return;
+
+  editingChannelId = id;
+  document.getElementById('dialog-title').textContent = 'Edit Channel';
+  document.getElementById('ch-name').value = ch.name;
+  document.getElementById('ch-provider').value = ch.provider;
+  switchProviderFields(ch.provider);
+  setProviderConfig(ch.provider, ch.config);
+  document.getElementById('ch-enabled').checked    = ch.enabled;
+  document.getElementById('ch-on-success').checked = ch.notify_on_success;
+  document.getElementById('ch-on-failure').checked = ch.notify_on_failure;
+  document.getElementById('ch-test-msg').textContent = '';
+  document.getElementById('channel-dialog').style.display = '';
+}
+
+async function saveChannel() {
+  const provider = document.getElementById('ch-provider').value;
+  const payload = {
+    name:              document.getElementById('ch-name').value.trim(),
+    provider,
+    config:            getProviderConfig(),
+    enabled:           document.getElementById('ch-enabled').checked,
+    notify_on_success: document.getElementById('ch-on-success').checked,
+    notify_on_failure: document.getElementById('ch-on-failure').checked,
+  };
+  if (!payload.name) { alert('Name is required'); return; }
+
+  const url    = editingChannelId ? `/api/notifications/${editingChannelId}` : '/api/notifications';
+  const method = editingChannelId ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + (data.error || res.status)); return; }
+  document.getElementById('channel-dialog').style.display = 'none';
+  await loadChannels();
+}
+
+async function deleteChannel(id, name) {
+  if (!confirm(`Delete channel "${name}"?`)) return;
+  const res = await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+  if (res.status !== 204 && !res.ok) { alert('Delete failed'); return; }
+  await loadChannels();
+}
+
+async function sendTestNotification() {
+  const provider = document.getElementById('ch-provider').value;
+  const msgEl    = document.getElementById('ch-test-msg');
+  msgEl.textContent = 'Sending…';
+
+  const payload = editingChannelId
+    ? { id: editingChannelId }
+    : { provider, config: getProviderConfig() };
+
+  try {
+    const res  = await fetch('/api/notifications/test', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const data = await res.json();
+    msgEl.textContent = res.ok ? '✅ Sent!' : '❌ ' + (data.error || 'Failed');
+  } catch(e) {
+    msgEl.textContent = '❌ ' + e.message;
+  }
+}
+
+document.getElementById('add-channel-btn').addEventListener('click', openAddDialog);
+document.getElementById('ch-save-btn').addEventListener('click', saveChannel);
+document.getElementById('ch-cancel-btn').addEventListener('click', () => {
+  document.getElementById('channel-dialog').style.display = 'none';
+});
+document.getElementById('ch-test-btn').addEventListener('click', sendTestNotification);
+document.getElementById('ch-provider').addEventListener('change', e => switchProviderFields(e.target.value));

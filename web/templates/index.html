@@ -13,6 +13,7 @@
     <nav class="tabs">
       <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
       <button class="tab-btn" data-tab="settings">Settings</button>
+      <button class="tab-btn" data-tab="notifications">Notifications</button>
     </nav>
     <span id="refresh-timer">Auto-refreshing in 60s</span>
   </div>
@@ -105,6 +106,72 @@
     <span id="settings-msg"></span>
   </section>
 </main>
+
+<main id="notifications-tab" style="display:none">
+  <section>
+    <div class="section-header">
+      <h2>Notification Channels</h2>
+      <button id="add-channel-btn">+ Add Channel</button>
+    </div>
+    <div id="channels-list"></div>
+  </section>
+</main>
+
+<!-- Add/Edit Channel Dialog -->
+<div id="channel-dialog" class="dialog-overlay" style="display:none">
+  <div class="dialog">
+    <h3 id="dialog-title">Add Channel</h3>
+
+    <label>Name
+      <input type="text" id="ch-name" placeholder="e.g. Slack alerts">
+    </label>
+
+    <label>Provider
+      <select id="ch-provider">
+        <option value="shoutrrr">Shoutrrr (Slack, Discord, Telegram, SMTP, ntfy…)</option>
+        <option value="greenapi">GreenAPI (WhatsApp cloud)</option>
+        <option value="whatsapp_web">WhatsApp Web (self-hosted)</option>
+      </select>
+    </label>
+
+    <!-- Shoutrrr fields -->
+    <div id="fields-shoutrrr" class="provider-fields">
+      <label>URL
+        <input type="text" id="ch-shoutrrr-url" placeholder="slack://token@channel">
+        <small>Examples: slack://token@channel · discord://token@id · telegram://token@telegram?chats=@ch · gotify://host/token · smtp://user:pass@host:port/?from=a@b&amp;to=c@d</small>
+      </label>
+    </div>
+
+    <!-- GreenAPI fields -->
+    <div id="fields-greenapi" class="provider-fields" style="display:none">
+      <label>Instance ID <input type="text" id="ch-ga-instance" placeholder="1234567890"></label>
+      <label>Token <input type="password" id="ch-ga-token" placeholder="API token"></label>
+      <label>Recipient Phone <input type="text" id="ch-ga-phone" placeholder="79001234567 (no + or spaces)"></label>
+      <label>API URL (optional) <input type="text" id="ch-ga-apiurl" placeholder="https://api.green-api.com"></label>
+    </div>
+
+    <!-- WhatsApp Web fields -->
+    <div id="fields-whatsapp_web" class="provider-fields" style="display:none">
+      <label>Base URL <input type="text" id="ch-wa-baseurl" placeholder="http://localhost:3000"></label>
+      <label>Recipient Phone <input type="text" id="ch-wa-phone" placeholder="628123456789"></label>
+      <label>Username (optional) <input type="text" id="ch-wa-user" placeholder="Basic Auth username"></label>
+      <label>Password (optional) <input type="password" id="ch-wa-pass" placeholder="Basic Auth password"></label>
+    </div>
+
+    <div class="dialog-toggles">
+      <label class="toggle-row"><input type="checkbox" id="ch-enabled" checked> Enabled</label>
+      <label class="toggle-row"><input type="checkbox" id="ch-on-success" checked> Notify on success</label>
+      <label class="toggle-row"><input type="checkbox" id="ch-on-failure" checked> Notify on failure</label>
+    </div>
+
+    <div class="dialog-actions">
+      <button id="ch-test-btn" class="btn-secondary">Send Test</button>
+      <span id="ch-test-msg" style="font-size:0.85rem"></span>
+      <button id="ch-save-btn">Save</button>
+      <button id="ch-cancel-btn" class="btn-ghost">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <script src="/static/app.js"></script>
 </body>

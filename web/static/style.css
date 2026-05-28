@@ -42,3 +42,32 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 #settings-msg { font-size: 0.85rem; }
 #settings-msg.ok { color: #2a9d5c; }
 #settings-msg.err { color: #c0392b; }
+
+/* Notifications tab */
+#channels-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.channel-row { display: flex; align-items: center; gap: 0.75rem; background: #f7f8fa; border-radius: 8px; padding: 0.75rem 1rem; }
+.channel-row .ch-name { font-weight: 600; flex: 1; }
+.channel-row .ch-provider { font-size: 0.78rem; color: #888; padding: 0.2rem 0.5rem; background: #e8eaf0; border-radius: 12px; }
+.channel-row .ch-badge { font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 10px; }
+.ch-badge.enabled  { background: #d4edda; color: #155724; }
+.ch-badge.disabled { background: #f8d7da; color: #721c24; }
+.ch-actions { display: flex; gap: 0.4rem; }
+.btn-secondary { background: #e8eaf0; color: #333; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+.btn-secondary:hover { background: #d0d3df; }
+.btn-ghost { background: transparent; color: #888; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+.btn-ghost:hover { color: #333; }
+
+/* Dialog */
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.dialog { background: #fff; border-radius: 12px; padding: 1.75rem; width: min(520px, 95vw); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.9rem; }
+.dialog h3 { margin: 0; font-size: 1.1rem; }
+.dialog label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 500; color: #555; }
+.dialog input, .dialog select, .dialog textarea { padding: 0.5rem 0.65rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem; }
+.dialog input:focus, .dialog select:focus { outline: none; border-color: #1a1a2e; }
+.dialog small { color: #aaa; font-size: 0.75rem; }
+.provider-fields { display: flex; flex-direction: column; gap: 0.75rem; }
+.dialog-toggles { display: flex; flex-direction: column; gap: 0.5rem; }
+.toggle-row { display: flex; align-items: center; gap: 0.5rem; font-weight: normal; flex-direction: row; }
+.toggle-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+.dialog-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding-top: 0.25rem; }
+.dialog-actions button[id=ch-save-btn] { margin-left: auto; }
