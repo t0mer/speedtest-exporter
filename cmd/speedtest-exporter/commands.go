@@ -99,11 +99,19 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 				defer sched.Stop()
 			}
 
-			quit := make(chan os.Signal, 1)
-			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-			go func() { <-quit; os.Exit(0) }()
+			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+			defer stop()
 
-			return api.NewServer(svc, cfg).ListenAndServe()
+			srv := api.NewServer(svc, cfg)
+			errCh := make(chan error, 1)
+			go func() { errCh <- srv.ListenAndServe() }()
+
+			select {
+			case <-ctx.Done():
+				return nil // defers run: svc.Close(), sched.Stop()
+			case err := <-errCh:
+				return err
+			}
 		},
 	}
 }
