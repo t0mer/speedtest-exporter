@@ -109,6 +109,71 @@ func (s *Service) SetNotificationManager(mgr *notifications.Manager) {
 	s.notifMgr = mgr
 }
 
+// RunWithProgress is like Run but uses the runner's ProgressRunner interface
+// to stream live phase events to progress. If the runner does not implement
+// ProgressRunner, it falls back to a plain Run() call with basic events.
+func (s *Service) RunWithProgress(ctx context.Context, source model.Source, progress chan<- runner.ProgressEvent) (*model.Result, error) {
+	start := time.Now()
+	s.metrics.IncrTests(string(source), "started")
+
+	s.mu.RLock()
+	r := s.runner
+	s.mu.RUnlock()
+
+	var result *model.Result
+	var err error
+
+	if pr, ok := r.(runner.ProgressRunner); ok {
+		result, err = pr.RunWithProgress(ctx, progress)
+	} else {
+		runner.SendEvent(progress, runner.ProgressEvent{Phase: runner.PhaseConnecting})
+		result, err = r.Run(ctx)
+	}
+
+	if err != nil {
+		s.metrics.IncrTests(string(source), "error")
+		runner.SendEvent(progress, runner.ProgressEvent{Phase: runner.PhaseError, Error: err.Error()})
+		if s.notifMgr != nil {
+			go s.notifMgr.NotifyFailure(context.Background(), err)
+		}
+		return nil, fmt.Errorf("run speed test: %w", err)
+	}
+
+	result.Source = source
+	result.Engine = r.Engine()
+	result.Timestamp = time.Now().UTC()
+	result.DurationSec = time.Since(start).Seconds()
+
+	s.metrics.ObserveDuration(result.DurationSec)
+	s.metrics.Update(result)
+	s.metrics.IncrTests(string(source), "success")
+
+	if err := s.db.Save(ctx, result); err != nil {
+		return result, fmt.Errorf("persist result: %w", err)
+	}
+
+	runner.SendEvent(progress, runner.ProgressEvent{
+		Phase:        runner.PhaseDone,
+		ServerName:   result.ServerName,
+		ServerID:     result.ServerID,
+		DownloadMbps: result.DownloadMbps,
+		UploadMbps:   result.UploadMbps,
+		PingMs:       result.PingMs,
+	})
+
+	if err := s.notifier.Notify(ctx, result); err != nil {
+		slog.Error("notification failed", "error", err)
+	}
+	for _, b := range s.notifier.Evaluate(result) {
+		s.metrics.IncrBreaches(b.Metric)
+	}
+	if s.notifMgr != nil {
+		go s.notifMgr.NotifySuccess(context.Background(), result)
+	}
+
+	return result, nil
+}
+
 // Apply applies DB-persisted settings to the live service components.
 // It hot-swaps the runner and updates the notifier without a restart.
 func (s *Service) Apply(settings *model.Settings, ooklaPath string) {

@@ -201,6 +201,59 @@ async function loadAll() {
   renderSparkline(results);
 }
 
+// ── Live progress helpers ─────────────────────────────────────────────────
+const PHASE_LABELS = {
+  connecting: 'CONNECTING',
+  ping:       'PING',
+  download:   'DOWNLOAD',
+  upload:     'UPLOAD',
+  done:       'DONE',
+  error:      'ERROR',
+};
+
+function setTestPhase(phase) {
+  const lbl = document.getElementById('phase-label');
+  if (lbl) lbl.textContent = PHASE_LABELS[phase] || phase.toUpperCase();
+}
+
+function setTestRunning(running) {
+  const card = document.getElementById('gauge-card');
+  if (card) card.classList.toggle('testing', running);
+}
+
+function handleProgressEvent(ev) {
+  setTestPhase(ev.phase);
+
+  if (ev.phase === 'connecting' && ev.server_name) {
+    const srvEl = document.getElementById('server-value');
+    if (srvEl) { srvEl.textContent = ev.server_name; srvEl.dataset.raw = '0'; }
+  }
+
+  if (ev.phase === 'ping' && ev.ping_ms > 0) {
+    const el = document.getElementById('ping-value');
+    if (el) { el.textContent = ev.ping_ms.toFixed(1); el.dataset.raw = ev.ping_ms; }
+  }
+
+  if (ev.phase === 'download' && ev.download_mbps > 0) {
+    const el = document.getElementById('dl-value');
+    if (el) { el.textContent = ev.download_mbps.toFixed(1); el.dataset.raw = ev.download_mbps; }
+    updateGauge(ev.download_mbps);
+  }
+
+  if (ev.phase === 'upload' && ev.upload_mbps > 0) {
+    const el = document.getElementById('ul-value');
+    if (el) { el.textContent = ev.upload_mbps.toFixed(1); el.dataset.raw = ev.upload_mbps; }
+  }
+
+  if (ev.phase === 'done') {
+    // Animate the final values for a polished landing.
+    if (ev.download_mbps) { animateNum(document.getElementById('dl-value'), ev.download_mbps, 1); updateGauge(ev.download_mbps); }
+    if (ev.upload_mbps)   { animateNum(document.getElementById('ul-value'), ev.upload_mbps, 1); }
+    if (ev.ping_ms)       { animateNum(document.getElementById('ping-value'), ev.ping_ms, 1); }
+    if (ev.server_name)   { const s = document.getElementById('server-value'); if (s) s.textContent = ev.server_name; }
+  }
+}
+
 // ── Run test buttons ──────────────────────────────────────────────────────
 async function runTest() {
   const btn    = document.getElementById('run-btn');
@@ -209,10 +262,34 @@ async function runTest() {
   if (btn) btn.disabled = true;
   if (mobBtn) mobBtn.disabled = true;
   if (label) label.textContent = 'Running…';
+  setTestRunning(true);
+  setTestPhase('connecting');
+
   try {
-    const res = await fetch('/api/test', { method: 'POST' });
-    if (!res.ok) throw new Error(await res.text());
-    await loadAll();
+    const res = await fetch('/api/test/stream', { method: 'POST' });
+    if (!res.ok) { throw new Error(await res.text()); }
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          handleProgressEvent(ev);
+          if (ev.phase === 'error') toast('Test error: ' + (ev.error || 'unknown'), 'err');
+        } catch { /* ignore malformed event */ }
+      }
+    }
+
+    await loadAll(); // refresh table, sparkline, summary
     toast('Test complete', 'ok');
   } catch (e) {
     toast('Test failed: ' + e.message, 'err');
@@ -220,6 +297,7 @@ async function runTest() {
     if (btn) btn.disabled = false;
     if (mobBtn) mobBtn.disabled = false;
     if (label) label.textContent = 'Run Test';
+    setTestRunning(false);
   }
 }
 document.getElementById('run-btn')?.addEventListener('click', runTest);

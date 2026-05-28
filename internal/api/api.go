@@ -43,6 +43,7 @@ func NewServer(svc *service.Service, cfg *config.Config, ooklaPath string, notif
 
 	s.router.Route("/api", func(r chi.Router) {
 		r.Post("/test", s.handleRunTest)
+		r.Post("/test/stream", s.handleStreamTest)
 		r.Get("/results", s.handleListResults)
 		r.Get("/results/latest", s.handleLatestResult)
 		r.Get("/results/{id}", s.handleGetResult)
