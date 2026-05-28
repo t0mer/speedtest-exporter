@@ -39,6 +39,17 @@ CREATE TABLE IF NOT EXISTS settings (
     data    TEXT NOT NULL,
     updated DATETIME NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notification_channels (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT NOT NULL,
+    provider          TEXT NOT NULL,
+    config_encrypted  BLOB NOT NULL,
+    enabled           INTEGER NOT NULL DEFAULT 1,
+    notify_on_success INTEGER NOT NULL DEFAULT 1,
+    notify_on_failure INTEGER NOT NULL DEFAULT 1,
+    created_at        DATETIME NOT NULL,
+    updated_at        DATETIME NOT NULL
+);
 `
 
 // DB wraps a SQLite connection.
@@ -219,6 +230,9 @@ func (d *DB) SaveSettings(ctx context.Context, s *model.Settings) error {
 	}
 	return nil
 }
+
+// SQL exposes the underlying *sql.DB for packages that need direct access.
+func (d *DB) SQL() *sql.DB { return d.db }
 
 // scanRow is a generic row scanner that works with both *sql.Row.Scan and rows.Scan.
 func scanRow(scan func(...any) error) (*model.Result, error) {
