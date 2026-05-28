@@ -110,3 +110,53 @@ func TestSummary(t *testing.T) {
 	assert.InDelta(t, 100.0, s.AvgDownload, 0.01)
 	assert.InDelta(t, 50.0, s.AvgUpload, 0.01)
 }
+
+func TestGetSettingsEmpty(t *testing.T) {
+	db := openTestDB(t)
+	s, err := db.GetSettings(context.Background())
+	require.NoError(t, err)
+	assert.Nil(t, s, "should return nil when no settings saved")
+}
+
+func TestSaveAndGetSettings(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	in := &model.Settings{
+		Engine:          "ookla",
+		Schedule:        "@every 2h",
+		MinDownloadMbps: 50.0,
+		MinUploadMbps:   20.0,
+		MaxPingMs:       100.0,
+		MaxJitterMs:     15.0,
+		MaxPacketLossRatio: 0.02,
+		CooldownMinutes: 60,
+		Webhooks:        []string{"https://a.example.com", "https://b.example.com"},
+	}
+
+	require.NoError(t, db.SaveSettings(ctx, in))
+
+	out, err := db.GetSettings(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	assert.Equal(t, "ookla", out.Engine)
+	assert.Equal(t, "@every 2h", out.Schedule)
+	assert.InDelta(t, 50.0, out.MinDownloadMbps, 0.001)
+	assert.Equal(t, []string{"https://a.example.com", "https://b.example.com"}, out.Webhooks)
+}
+
+func TestSaveSettingsOverwrites(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	first := &model.Settings{Engine: "go", Schedule: "@every 1h"}
+	require.NoError(t, db.SaveSettings(ctx, first))
+
+	second := &model.Settings{Engine: "ookla", Schedule: "@every 6h"}
+	require.NoError(t, db.SaveSettings(ctx, second))
+
+	out, err := db.GetSettings(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "ookla", out.Engine)
+	assert.Equal(t, "@every 6h", out.Schedule)
+}
