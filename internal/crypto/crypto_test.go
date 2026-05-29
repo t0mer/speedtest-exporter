@@ -54,3 +54,17 @@ func TestLoadOrCreateKey(t *testing.T) {
 	_, err = os.Stat(dir + "/.encryption_key")
 	assert.NoError(t, err)
 }
+
+func TestDeriveKey(t *testing.T) {
+	salt := []byte("testsalt12345678")
+	k1 := crypto.DeriveKey("passphrase", salt)
+	k2 := crypto.DeriveKey("passphrase", salt)
+	assert.Len(t, k1, 32)
+	assert.Equal(t, k1, k2, "same inputs must produce same key")
+
+	k3 := crypto.DeriveKey("other", salt)
+	assert.NotEqual(t, k1, k3, "different passphrase must produce different key")
+
+	k4 := crypto.DeriveKey("passphrase", []byte("differentsalt123"))
+	assert.NotEqual(t, k1, k4, "different salt must produce different key")
+}
