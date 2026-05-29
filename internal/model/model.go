@@ -44,15 +44,15 @@ type Result struct {
 // These fields override their equivalents from the YAML/env config at startup
 // and take effect immediately when saved via the API.
 type Settings struct {
-	Engine              string   `json:"engine"`
-	Schedule            string   `json:"schedule"`
-	MinDownloadMbps     float64  `json:"min_download_mbps"`
-	MinUploadMbps       float64  `json:"min_upload_mbps"`
-	MaxPingMs           float64  `json:"max_ping_ms"`
-	MaxJitterMs         float64  `json:"max_jitter_ms"`
-	MaxPacketLossRatio  float64  `json:"max_packet_loss_ratio"`
-	CooldownMinutes     int      `json:"cooldown_minutes"`
-	Webhooks            []string `json:"webhooks"`
+	Engine             string   `json:"engine"`
+	Schedule           string   `json:"schedule"`
+	MinDownloadMbps    float64  `json:"min_download_mbps"`
+	MinUploadMbps      float64  `json:"min_upload_mbps"`
+	MaxPingMs          float64  `json:"max_ping_ms"`
+	MaxJitterMs        float64  `json:"max_jitter_ms"`
+	MaxPacketLossRatio float64  `json:"max_packet_loss_ratio"`
+	CooldownMinutes    int      `json:"cooldown_minutes"`
+	Webhooks           []string `json:"webhooks"`
 	// PreferredServerID is the numeric Speedtest.net server ID to use for Go-engine
 	// tests. Empty means "pick nearest". If the preferred server fails the test,
 	// the runner falls back to the nearest available server automatically.
