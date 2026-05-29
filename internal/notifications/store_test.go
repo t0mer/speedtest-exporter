@@ -108,6 +108,31 @@ func TestStoreMaskConfig(t *testing.T) {
 	assert.NotContains(t, string(view.Config), "secret-token")
 }
 
+func TestReplaceAll(t *testing.T) {
+	store := openTestStore(t)
+	ctx := context.Background()
+
+	// Seed existing channels
+	existing := &notifications.Channel{
+		Name: "Old", Provider: notifications.ProviderShoutrrr,
+		Config: makeShoutrrr("slack://old@c"), Enabled: true,
+	}
+	require.NoError(t, store.Save(ctx, existing))
+
+	// Replace with two new channels
+	replacements := []notifications.Channel{
+		{Name: "New1", Provider: notifications.ProviderShoutrrr, Config: makeShoutrrr("slack://a@b"), Enabled: true},
+		{Name: "New2", Provider: notifications.ProviderShoutrrr, Config: makeShoutrrr("discord://x@y"), Enabled: false},
+	}
+	require.NoError(t, store.ReplaceAll(ctx, replacements))
+
+	list, err := store.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, list, 2)
+	names := []string{list[0].Name, list[1].Name}
+	assert.ElementsMatch(t, []string{"New1", "New2"}, names)
+}
+
 func TestDeleteAll(t *testing.T) {
 	db, err := database.Open(t.TempDir())
 	require.NoError(t, err)

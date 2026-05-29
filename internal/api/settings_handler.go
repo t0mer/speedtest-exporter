@@ -72,7 +72,11 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		slog.Error("scheduler restart failed", "error", err)
 	}
 
-	writeJSON(w, http.StatusOK, &settings)
+	resp := settings
+	if resp.ExportPassphrase != "" {
+		resp.ExportPassphrase = "***"
+	}
+	writeJSON(w, http.StatusOK, &resp)
 }
 
 // defaultSettings returns settings derived from the startup config,
