@@ -475,6 +475,7 @@ async function loadSettings() {
     TIME_FORMAT = s.time_format || '';
     v('cfg-date-format', DATE_FORMAT);
     v('cfg-time-format', TIME_FORMAT);
+    v('cfg-export-passphrase', s.export_passphrase || '');
     setPreferredServerDisplay(s.preferred_server_id || '', s.preferred_server_name || '');
     updatePreferredServerVisibility();
   } catch { /* already loaded */ }
@@ -502,6 +503,7 @@ async function saveSettings() {
     preferred_server_name: g('pref-server-name')?.value || '',
     date_format:           g('cfg-date-format')?.value || '',
     time_format:           g('cfg-time-format')?.value || '',
+    export_passphrase:     g('cfg-export-passphrase')?.value || '',
   };
   try {
     const res  = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -527,6 +529,58 @@ async function saveSettings() {
   }
 }
 document.getElementById('save-btn')?.addEventListener('click', saveSettings);
+
+// ── Export / Import ───────────────────────────────────────────────────────
+async function exportSettings(encrypted) {
+  try {
+    const res = await fetch(`/api/settings/export?encrypted=${encrypted}`);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast(d.error || 'Export failed', 'err');
+      return;
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'speedtest-settings.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    toast('Settings exported', 'ok');
+  } catch (e) {
+    toast('Export failed: ' + e.message, 'err');
+  }
+}
+
+async function importSettings() {
+  const file = document.getElementById('import-file')?.files?.[0];
+  if (!file) return;
+  const msg = document.getElementById('import-msg');
+  if (msg) { msg.textContent = 'Importing…'; msg.className = 'save-msg'; }
+  try {
+    const res = await fetch('/api/settings/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await file.text(),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (msg) { msg.textContent = data.error || 'Import failed'; msg.className = 'save-msg err'; }
+      toast(data.error || 'Import failed', 'err');
+      return;
+    }
+    const n = data.channels_imported ?? 0;
+    if (msg) { msg.textContent = `Imported (${n} channel${n !== 1 ? 's' : ''})`; msg.className = 'save-msg ok'; }
+    toast(`Settings imported — ${n} channel${n !== 1 ? 's' : ''} restored`, 'ok');
+    await loadSettings();
+    await loadChannels();
+    setTimeout(() => { if (msg) msg.textContent = ''; }, 4000);
+  } catch (e) {
+    if (msg) { msg.textContent = 'Network error'; msg.className = 'save-msg err'; }
+    toast('Network error: ' + e.message, 'err');
+  }
+}
 
 // ── Server picker ─────────────────────────────────────────────────────────
 let allServers = null; // cached after first fetch
@@ -799,6 +853,15 @@ document.getElementById('ch-provider')?.addEventListener('change', e => switchPr
 document.getElementById('channel-dialog')?.addEventListener('click', function(e) {
   if (e.target === this) closeDialog();
 });
+
+// ── Export/Import listeners ───────────────────────────────────────────────
+document.getElementById('export-enc-btn')?.addEventListener('click', () => exportSettings(true));
+document.getElementById('export-plain-btn')?.addEventListener('click', () => exportSettings(false));
+document.getElementById('import-btn')?.addEventListener('click', () => {
+  const fi = document.getElementById('import-file');
+  if (fi) { fi.value = ''; fi.click(); }
+});
+document.getElementById('import-file')?.addEventListener('change', importSettings);
 
 // ── Pagination listeners ──────────────────────────────────────────────────
 document.getElementById('page-prev')?.addEventListener('click', () => {
