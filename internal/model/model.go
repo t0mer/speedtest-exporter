@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Engine identifies the speedtest backend.
 type Engine string
@@ -63,4 +66,30 @@ type Settings struct {
 	// Empty string means use the browser's locale default.
 	// Valid values: "HH:mm", "HH:mm:ss", "hh:mm a", "hh:mm:ss a"
 	TimeFormat string `json:"time_format"`
+	// ExportPassphrase is the passphrase used to encrypt/decrypt settings export files.
+	// Empty string means encrypted export is not available.
+	// Never written into export files.
+	ExportPassphrase string `json:"export_passphrase"`
+}
+
+// ExportDoc is the top-level structure of a settings export file.
+type ExportDoc struct {
+	Version   int             `json:"version"`
+	Encrypted bool            `json:"encrypted"`
+	Salt      string          `json:"salt"`
+	Settings  Settings        `json:"settings"`
+	Channels  []ExportChannel `json:"channels"`
+}
+
+// ExportChannel is the per-channel record inside an ExportDoc.
+// Config holds the plain JSON config (unencrypted export).
+// ConfigEncrypted holds the base64-encoded AES-256-GCM ciphertext (encrypted export).
+type ExportChannel struct {
+	Name            string          `json:"name"`
+	Provider        string          `json:"provider"`
+	Enabled         bool            `json:"enabled"`
+	NotifyOnSuccess bool            `json:"notify_on_success"`
+	NotifyOnFailure bool            `json:"notify_on_failure"`
+	Config          json.RawMessage `json:"config,omitempty"`
+	ConfigEncrypted string          `json:"config_encrypted,omitempty"`
 }
