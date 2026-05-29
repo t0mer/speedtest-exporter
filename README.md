@@ -7,11 +7,12 @@ Monitor your internet connection speed with automated tests, a live dashboard, P
 - **Live dashboard** — animated download gauge, real-time sparkline chart, paginated results table with ▲/▼ trend arrows
 - **Live test progress** — watch ping, download, and upload update in real time via Server-Sent Events as each phase completes
 - **Two test backends** — built-in pure-Go engine (no binary needed) or the official Ookla CLI
-- **Preferred server** — pick a specific Speedtest.net server; automatic fallback to nearest if it fails
+- **Preferred server** — pick a specific Speedtest.net server from a distance-sorted list; automatic fallback to nearest if it fails
 - **Scheduled tests** — cron-based automation (`@every 1h`, `0 */6 * * *`, etc.)
 - **Prometheus metrics** — scrape `/metrics` for Grafana dashboards
 - **Threshold notifications** — alert on slow speeds or high latency via Shoutrrr (Slack, Discord, Telegram, SMTP…), GreenAPI (WhatsApp cloud), or self-hosted WhatsApp Web
 - **AES-256-GCM encrypted credentials** — notification secrets never stored in plaintext
+- **Date & time format** — choose how timestamps are displayed across the dashboard (ISO, US, EU, 12h/24h)
 - **Settings UI** — all runtime config editable in the browser without a restart
 - **Responsive, mobile-friendly** — bottom navigation, full gauge layout on any screen size
 
@@ -24,6 +25,30 @@ Monitor your internet connection speed with automated tests, a live dashboard, P
 ![Dashboard](assets/screenshots/dashboard.png)
 
 The dashboard shows the latest download speed on an animated arc gauge, secondary metrics (upload, ping, jitter, server), a 7-day summary, a dual-line speed history chart, and a paginated results table. Each row includes ▲/▼ arrows that compare the result to the previous test — green for improvement, red for regression.
+
+### Settings
+
+![Settings](assets/screenshots/settings.png)
+
+All runtime configuration is editable in the browser without a restart. Settings are grouped into: **Display** (date/time format), **Engine** (test backend and preferred server), **Schedule** (cron expression), **Thresholds** (breach limits for notifications), and **Webhooks**.
+
+### Server Picker
+
+![Server Picker](assets/screenshots/server-picker.png)
+
+Browse and search nearby Speedtest.net servers sorted by distance. Selecting a preferred server pins future tests to that host; if it is unreachable the nearest available server is used automatically.
+
+### Alerts (Notification Channels)
+
+![Notifications](assets/screenshots/notifications.png)
+
+The Alerts tab manages notification channels. Each channel supports Shoutrrr (Slack, Discord, Telegram, SMTP, ntfy, Gotify…), GreenAPI (WhatsApp cloud), or self-hosted WhatsApp Web.
+
+### Add Channel
+
+![Add Channel](assets/screenshots/add-channel.png)
+
+The Add Channel dialog supports multiple providers. Toggle **Notify on success** and **Notify on failure** independently, and send a live test message before saving to confirm the channel is working.
 
 ### Mobile
 
@@ -119,7 +144,7 @@ Configuration is layered: **built-in defaults → YAML file → environment vari
 
 Environment variables use the `SPEEDTEST_` prefix with `_` for nesting, e.g. `SPEEDTEST_SERVER_PORT=9090`.
 
-All runtime settings (engine, schedule, thresholds, notifications) can also be changed at any time through the **Settings** tab in the Web UI without restarting the server.
+All runtime settings (engine, schedule, thresholds, display format, notifications) can also be changed at any time through the **Settings** tab in the Web UI without restarting the server.
 
 ### config.yaml
 
@@ -166,6 +191,50 @@ webhooks: []             # legacy webhook URLs for threshold alerts
 | `SPEEDTEST_THRESHOLDS_MAX_JITTER_MS` | `0` | Maximum jitter (0 = off) |
 | `SPEEDTEST_THRESHOLDS_MAX_PACKET_LOSS_RATIO` | `0` | Maximum packet loss ratio 0–1 (0 = off) |
 | `SPEEDTEST_THRESHOLDS_COOLDOWN_MINUTES` | `30` | Minimum minutes between alerts |
+
+---
+
+## Settings
+
+All settings below are editable in the browser via **Settings** tab and take effect immediately without a restart. They are persisted to the local SQLite database and override the YAML/env config.
+
+### Display
+
+| Field | Options | Description |
+|---|---|---|
+| Date Format | Default, `YYYY-MM-DD`, `MM/DD/YYYY`, `DD/MM/YYYY`, `DD.MM.YYYY` | How dates are shown across the dashboard. Default uses the browser locale. |
+| Time Format | Default, `HH:mm`, `HH:mm:ss`, `hh:mm AM/PM`, `hh:mm:ss AM/PM` | How times are shown across the dashboard. Default uses the browser locale. |
+
+### Engine
+
+| Field | Options | Description |
+|---|---|---|
+| Test Backend | `go`, `ookla` | `go` uses the built-in pure-Go engine (no binary required). `ookla` shells out to the official Speedtest CLI. |
+| Preferred Server | Browse / clear | Pin tests to a specific Speedtest.net server by ID. Falls back to nearest if the server is unreachable. |
+
+### Schedule
+
+Standard cron expressions or Go-style shorthands:
+
+| Expression | Meaning |
+|---|---|
+| `@every 1h` | Every hour |
+| `@hourly` | Every hour (alias) |
+| `0 */6 * * *` | Every 6 hours |
+| *(empty)* | Disabled — manual and API tests only |
+
+### Thresholds
+
+Notifications fire when a metric breaches its limit. Set to `0` to disable a threshold.
+
+| Field | Unit | Description |
+|---|---|---|
+| Min Download | Mbps | Alert if download falls below this value |
+| Min Upload | Mbps | Alert if upload falls below this value |
+| Max Ping | ms | Alert if ping exceeds this value |
+| Max Jitter | ms | Alert if jitter exceeds this value |
+| Max Packet Loss | ratio 0–1 | Alert if packet loss exceeds this value |
+| Cooldown | minutes | Minimum gap between repeat alerts for the same metric |
 
 ---
 
@@ -222,6 +291,29 @@ All endpoints return JSON.
 | `GET` | `/metrics` | Prometheus exposition |
 | `GET` | `/healthz` | Liveness probe (`{"status":"ok"}`) |
 
+### Settings fields (`GET / PUT /api/settings`)
+
+```json
+{
+  "engine": "go",
+  "schedule": "@every 1h",
+  "min_download_mbps": 0,
+  "min_upload_mbps": 0,
+  "max_ping_ms": 0,
+  "max_jitter_ms": 0,
+  "max_packet_loss_ratio": 0,
+  "cooldown_minutes": 30,
+  "webhooks": [],
+  "preferred_server_id": "",
+  "preferred_server_name": "",
+  "date_format": "",
+  "time_format": ""
+}
+```
+
+`date_format` accepts `""` (browser locale), `"YYYY-MM-DD"`, `"MM/DD/YYYY"`, `"DD/MM/YYYY"`, `"DD.MM.YYYY"`.  
+`time_format` accepts `""` (browser locale), `"HH:mm"`, `"HH:mm:ss"`, `"hh:mm a"`, `"hh:mm:ss a"`.
+
 ### SSE stream format (`/api/test/stream`)
 
 ```
@@ -264,6 +356,8 @@ Requires a [GreenAPI](https://green-api.com) account. Fields: Instance ID, Token
 Requires a running [go-whatsapp-web-multidevice](https://github.com/aldinokemal/go-whatsapp-web-multidevice) instance. Fields: Base URL, Recipient Phone, optional Basic Auth.
 
 > **Security:** Outbound URLs for GreenAPI and WhatsApp Web are validated at connection time using a dial-level IP check (defeating DNS rebinding). The Shoutrrr `generic://` scheme is blocked.
+
+Each channel has independent **Notify on success** and **Notify on failure** toggles. Use **Send Test** in the dialog to fire a real message before saving.
 
 ---
 
