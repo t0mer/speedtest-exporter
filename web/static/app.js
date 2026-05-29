@@ -758,7 +758,7 @@ function getProviderConfig() {
   if (p === 'shoutrrr') return { url: document.getElementById('ch-shoutrrr-url').value.trim() };
   if (p === 'greenapi') return {
     instance_id: document.getElementById('ch-ga-instance').value.trim(),
-    token:       document.getElementById('ch-ga-token').value,
+    token:       document.getElementById('ch-ga-token').value.trim(),
     phone:       document.getElementById('ch-ga-phone').value.trim(),
     api_url:     document.getElementById('ch-ga-apiurl').value.trim(),
   };
@@ -766,7 +766,7 @@ function getProviderConfig() {
     base_url: document.getElementById('ch-wa-baseurl').value.trim(),
     phone:    document.getElementById('ch-wa-phone').value.trim(),
     username: document.getElementById('ch-wa-user').value.trim(),
-    password: document.getElementById('ch-wa-pass').value,
+    password: document.getElementById('ch-wa-pass').value.trim(),
   };
 }
 

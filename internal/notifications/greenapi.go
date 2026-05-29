@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -16,14 +17,23 @@ type greenAPISender struct {
 }
 
 func (s *greenAPISender) Send(ctx context.Context, message string) error {
-	apiURL := strings.TrimRight(s.cfg.APIURL, "/")
+	apiURL := strings.TrimSpace(s.cfg.APIURL)
 	if apiURL == "" {
 		apiURL = defaultGreenAPIURL
 	}
-	url := fmt.Sprintf("%s/waInstance%s/sendMessage/%s", apiURL, s.cfg.InstanceID, s.cfg.Token)
+	apiURL = strings.TrimRight(apiURL, "/")
+
+	instanceID := strings.TrimSpace(s.cfg.InstanceID)
+	token := strings.TrimSpace(s.cfg.Token)
+	chatID := strings.TrimSpace(s.cfg.Phone)
+	if !strings.Contains(chatID, "@") {
+		chatID += "@c.us"
+	}
+
+	url := fmt.Sprintf("%s/waInstance%s/sendMessage/%s", apiURL, instanceID, token)
 
 	body, _ := json.Marshal(map[string]string{
-		"chatId":  s.cfg.Phone + "@c.us",
+		"chatId":  chatID,
 		"message": message,
 	})
 
@@ -39,8 +49,9 @@ func (s *greenAPISender) Send(ctx context.Context, message string) error {
 		return fmt.Errorf("greenapi: send failed (network error)")
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("greenapi: HTTP %d", resp.StatusCode)
+	if resp.StatusCode >= 300 {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("greenapi: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet)))
 	}
 	return nil
 }
