@@ -215,3 +215,150 @@ func TestDeleteChannel(t *testing.T) {
 	srv.ServeHTTP(delRec, delReq)
 	assert.Equal(t, http.StatusNoContent, delRec.Code)
 }
+
+func buildTestServerWithNotifAndKey(t *testing.T, key []byte) (http.Handler, *database.DB) {
+	t.Helper()
+	db, err := database.Open(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	store := notifications.NewStore(db.SQL(), key)
+	svc := service.New(db, &alwaysOKRunner{}, metrics.New(), notify.New(notify.ThresholdConfig{}, nil))
+	cfg := config.Default()
+	cfg.Server.EnableUI = false
+	return api.NewServer(svc, &cfg, "speedtest", store), db
+}
+
+func TestExportSettingsUnencrypted(t *testing.T) {
+	key := make([]byte, 32)
+	srv, _ := buildTestServerWithNotifAndKey(t, key)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/export?encrypted=false", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Disposition"), "speedtest-settings.json")
+
+	var doc model.ExportDoc
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&doc))
+	assert.Equal(t, 1, doc.Version)
+	assert.False(t, doc.Encrypted)
+	assert.Empty(t, doc.Salt)
+	assert.NotEmpty(t, doc.Settings.Engine)
+	assert.Empty(t, doc.Settings.ExportPassphrase, "passphrase must not be exported")
+}
+
+func TestExportSettingsEncryptedNeedPassphrase(t *testing.T) {
+	key := make([]byte, 32)
+	srv, _ := buildTestServerWithNotifAndKey(t, key)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/export?encrypted=true", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestExportImportRoundtripUnencrypted(t *testing.T) {
+	key := make([]byte, 32)
+	srv, db := buildTestServerWithNotifAndKey(t, key)
+	ctx := context.Background()
+
+	store := notifications.NewStore(db.SQL(), key)
+	ch := &notifications.Channel{
+		Name:            "Slack",
+		Provider:        notifications.ProviderShoutrrr,
+		Config:          json.RawMessage(`{"url":"slack://token@channel"}`),
+		Enabled:         true,
+		NotifyOnSuccess: true,
+		NotifyOnFailure: false,
+	}
+	require.NoError(t, store.Save(ctx, ch))
+
+	exportReq := httptest.NewRequest(http.MethodGet, "/api/settings/export?encrypted=false", nil)
+	exportRec := httptest.NewRecorder()
+	srv.ServeHTTP(exportRec, exportReq)
+	require.Equal(t, http.StatusOK, exportRec.Code)
+
+	require.NoError(t, store.DeleteAll(ctx))
+	importReq := httptest.NewRequest(http.MethodPost, "/api/settings/import", exportRec.Body)
+	importReq.Header.Set("Content-Type", "application/json")
+	importRec := httptest.NewRecorder()
+	srv.ServeHTTP(importRec, importReq)
+	require.Equal(t, http.StatusOK, importRec.Code)
+
+	var result map[string]any
+	require.NoError(t, json.NewDecoder(importRec.Body).Decode(&result))
+	assert.Equal(t, float64(1), result["channels_imported"])
+
+	channels, err := store.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, channels, 1)
+	assert.Equal(t, "Slack", channels[0].Name)
+}
+
+func TestExportImportRoundtripEncrypted(t *testing.T) {
+	key := make([]byte, 32)
+	srv, db := buildTestServerWithNotifAndKey(t, key)
+	ctx := context.Background()
+
+	store := notifications.NewStore(db.SQL(), key)
+	settings := &model.Settings{Engine: "go", Schedule: "", Webhooks: []string{}, ExportPassphrase: "testpass"}
+	require.NoError(t, db.SaveSettings(ctx, settings))
+	ch := &notifications.Channel{
+		Name:     "Discord",
+		Provider: notifications.ProviderShoutrrr,
+		Config:   json.RawMessage(`{"url":"discord://tok@id"}`),
+		Enabled:  true,
+	}
+	require.NoError(t, store.Save(ctx, ch))
+
+	exportReq := httptest.NewRequest(http.MethodGet, "/api/settings/export?encrypted=true", nil)
+	exportRec := httptest.NewRecorder()
+	srv.ServeHTTP(exportRec, exportReq)
+	require.Equal(t, http.StatusOK, exportRec.Code)
+
+	var doc model.ExportDoc
+	exportBody := exportRec.Body.Bytes()
+	require.NoError(t, json.Unmarshal(exportBody, &doc))
+	assert.True(t, doc.Encrypted)
+	assert.NotEmpty(t, doc.Salt)
+	assert.Empty(t, doc.Settings.ExportPassphrase)
+	require.Len(t, doc.Channels, 1)
+	assert.Empty(t, doc.Channels[0].Config)
+	assert.NotEmpty(t, doc.Channels[0].ConfigEncrypted)
+
+	require.NoError(t, store.DeleteAll(ctx))
+	importReq := httptest.NewRequest(http.MethodPost, "/api/settings/import",
+		strings.NewReader(string(exportBody)))
+	importReq.Header.Set("Content-Type", "application/json")
+	importRec := httptest.NewRecorder()
+	srv.ServeHTTP(importRec, importReq)
+	require.Equal(t, http.StatusOK, importRec.Code)
+
+	channels, err := store.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, channels, 1)
+	assert.Equal(t, "Discord", channels[0].Name)
+	assert.Contains(t, string(channels[0].Config), "discord://")
+}
+
+func TestImportBadVersion(t *testing.T) {
+	srv := buildTestServer(t)
+	body := `{"version":99,"encrypted":false,"salt":"","settings":{"engine":"go","webhooks":[]},"channels":[]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/import", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestImportEncryptedNoPassphrase(t *testing.T) {
+	srv := buildTestServer(t)
+	body := `{"version":1,"encrypted":true,"salt":"aabbccdd","settings":{"engine":"go","webhooks":[]},"channels":[]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/import", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
