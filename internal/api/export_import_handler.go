@@ -13,6 +13,7 @@ import (
 	"github.com/t0mer/speedtest-exporter/internal/crypto"
 	"github.com/t0mer/speedtest-exporter/internal/model"
 	"github.com/t0mer/speedtest-exporter/internal/notifications"
+	"github.com/t0mer/speedtest-exporter/internal/scheduler"
 )
 
 func (s *Server) handleExportSettings(w http.ResponseWriter, r *http.Request) {
@@ -115,16 +116,24 @@ func (s *Server) handleImportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var derivedKey []byte
-	if doc.Encrypted {
-		current, err := s.service.DB().GetSettings(ctx)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+	if doc.Settings.Schedule != "" {
+		if err := scheduler.ValidateSpec(doc.Settings.Schedule); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid schedule: "+err.Error())
 			return
 		}
-		if current == nil {
-			current = s.defaultSettings()
-		}
+	}
+
+	current, err := s.service.DB().GetSettings(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if current == nil {
+		current = s.defaultSettings()
+	}
+
+	var derivedKey []byte
+	if doc.Encrypted {
 		if current.ExportPassphrase == "" {
 			writeError(w, http.StatusBadRequest, "export_passphrase is not configured; set it in Settings before importing an encrypted file")
 			return
@@ -152,6 +161,9 @@ func (s *Server) handleImportSettings(w http.ResponseWriter, r *http.Request) {
 			doc.Channels[i].Config = plaintext
 		}
 	}
+
+	// Preserve the current passphrase — export files never contain it.
+	doc.Settings.ExportPassphrase = current.ExportPassphrase
 
 	if doc.Settings.Webhooks == nil {
 		doc.Settings.Webhooks = []string{}
