@@ -18,7 +18,11 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if settings == nil {
 		settings = s.defaultSettings()
 	}
-	writeJSON(w, http.StatusOK, settings)
+	masked := *settings
+	if masked.ExportPassphrase != "" {
+		masked.ExportPassphrase = "***"
+	}
+	writeJSON(w, http.StatusOK, &masked)
 }
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +41,19 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if err := scheduler.ValidateSpec(settings.Schedule); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid schedule: "+err.Error())
 			return
+		}
+	}
+
+	if settings.ExportPassphrase == "***" {
+		current, err := s.service.DB().GetSettings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if current != nil {
+			settings.ExportPassphrase = current.ExportPassphrase
+		} else {
+			settings.ExportPassphrase = ""
 		}
 	}
 

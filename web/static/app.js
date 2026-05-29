@@ -475,7 +475,7 @@ async function loadSettings() {
     TIME_FORMAT = s.time_format || '';
     v('cfg-date-format', DATE_FORMAT);
     v('cfg-time-format', TIME_FORMAT);
-    v('cfg-export-passphrase', s.export_passphrase || '');
+    v('cfg-export-passphrase', s.export_passphrase === '***' ? '' : (s.export_passphrase || ''));
     setPreferredServerDisplay(s.preferred_server_id || '', s.preferred_server_name || '');
     updatePreferredServerVisibility();
   } catch { /* already loaded */ }

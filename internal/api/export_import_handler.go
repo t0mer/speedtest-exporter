@@ -139,7 +139,7 @@ func (s *Server) handleImportSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		salt, err := hex.DecodeString(doc.Salt)
-		if err != nil {
+		if err != nil || len(salt) < 16 {
 			writeError(w, http.StatusBadRequest, "invalid salt in export file")
 			return
 		}
@@ -176,25 +176,29 @@ func (s *Server) handleImportSettings(w http.ResponseWriter, r *http.Request) {
 
 	channelsImported := 0
 	if s.notifStore != nil {
-		if err := s.notifStore.DeleteAll(ctx); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		toInsert := make([]notifications.Channel, 0, len(doc.Channels))
 		for _, ec := range doc.Channels {
-			ch := &notifications.Channel{
+			switch notifications.Provider(ec.Provider) {
+			case notifications.ProviderShoutrrr, notifications.ProviderGreenAPI, notifications.ProviderWhatsAppWeb:
+				// valid
+			default:
+				writeError(w, http.StatusBadRequest, "invalid provider: "+ec.Provider)
+				return
+			}
+			toInsert = append(toInsert, notifications.Channel{
 				Name:            ec.Name,
 				Provider:        notifications.Provider(ec.Provider),
 				Config:          ec.Config,
 				Enabled:         ec.Enabled,
 				NotifyOnSuccess: ec.NotifyOnSuccess,
 				NotifyOnFailure: ec.NotifyOnFailure,
-			}
-			if err := s.notifStore.Save(ctx, ch); err != nil {
-				writeError(w, http.StatusInternalServerError, "save channel: "+err.Error())
-				return
-			}
-			channelsImported++
+			})
 		}
+		if err := s.notifStore.ReplaceAll(ctx, toInsert); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		channelsImported = len(toInsert)
 	}
 
 	s.service.Apply(&doc.Settings, s.ooklaPath)
