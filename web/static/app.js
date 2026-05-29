@@ -6,6 +6,54 @@ const ESC = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 function esc(s) { return String(s == null ? '—' : s).replace(/[&<>"']/g, c => ESC[c]); }
 function fmt(n, dec) { return n == null ? '—' : Number(n).toFixed(dec ?? 1); }
 
+// ── Date / time format state (set from settings on load) ──────────────────
+let DATE_FORMAT = ''; // "" = browser locale; see formatDate()
+let TIME_FORMAT = ''; // "" = browser locale; see formatTime()
+
+// ── Date / time formatters ─────────────────────────────────────────────────
+function formatDate(d) {
+  if (!DATE_FORMAT) return d.toLocaleDateString();
+  const y   = d.getFullYear();
+  const mon = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  switch (DATE_FORMAT) {
+    case 'YYYY-MM-DD': return `${y}-${mon}-${day}`;
+    case 'MM/DD/YYYY': return `${mon}/${day}/${y}`;
+    case 'DD/MM/YYYY': return `${day}/${mon}/${y}`;
+    case 'DD.MM.YYYY': return `${day}.${mon}.${y}`;
+    default:           return d.toLocaleDateString();
+  }
+}
+
+function formatTime(d) {
+  if (!TIME_FORMAT) return d.toLocaleTimeString();
+  const h24 = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const sec = String(d.getSeconds()).padStart(2, '0');
+  switch (TIME_FORMAT) {
+    case 'HH:mm':     return `${String(h24).padStart(2, '0')}:${min}`;
+    case 'HH:mm:ss':  return `${String(h24).padStart(2, '0')}:${min}:${sec}`;
+    case 'hh:mm a': {
+      const ampm = h24 >= 12 ? 'PM' : 'AM';
+      const h12  = h24 % 12 || 12;
+      return `${String(h12).padStart(2, '0')}:${min} ${ampm}`;
+    }
+    case 'hh:mm:ss a': {
+      const ampm = h24 >= 12 ? 'PM' : 'AM';
+      const h12  = h24 % 12 || 12;
+      return `${String(h12).padStart(2, '0')}:${min}:${sec} ${ampm}`;
+    }
+    default: return d.toLocaleTimeString();
+  }
+}
+
+function formatDateTime(isoString) {
+  if (!isoString) return '—';
+  const d = new Date(isoString);
+  if (isNaN(d)) return '—';
+  return formatDate(d) + ' ' + formatTime(d);
+}
+
 // ── Toast system ──────────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
   const stack = document.getElementById('toast-stack');
@@ -141,7 +189,7 @@ function renderLatest(r) {
   if (ispEl)    ispEl.textContent = r.isp || '';
   if (tsEl) {
     const d = new Date(r.timestamp);
-    tsEl.textContent = `Last test: ${d.toLocaleTimeString()} · ${d.toLocaleDateString()}`;
+    tsEl.textContent = `Last test: ${formatDate(d)} · ${formatTime(d)}`;
   }
 }
 
@@ -198,7 +246,7 @@ function renderTablePage(rows, compRow) {
     const pg   = delta(r.ping_ms,       prev?.ping_ms,       false);
     const jt   = delta(r.jitter_ms,     prev?.jitter_ms,     false);
     return `<tr>
-      <td>${esc(new Date(r.timestamp).toLocaleString())}</td>
+      <td>${esc(formatDateTime(r.timestamp))}</td>
       <td class="num-cell">${fmt(r.download_mbps)}${dl} <span class="unit">Mbps</span></td>
       <td class="num-cell">${fmt(r.upload_mbps)}${ul} <span class="unit">Mbps</span></td>
       <td class="num-cell">${fmt(r.ping_ms)}${pg} <span class="unit">ms</span></td>
@@ -423,6 +471,11 @@ async function loadSettings() {
     n('cfg-max-packet-loss',  s.max_packet_loss_ratio);
     n('cfg-cooldown',         s.cooldown_minutes);
     v('cfg-webhooks', (s.webhooks || []).join('\n'));
+    DATE_FORMAT = s.date_format || '';
+    TIME_FORMAT = s.time_format || '';
+    v('cfg-date-format', DATE_FORMAT);
+    v('cfg-time-format', TIME_FORMAT);
+    v('cfg-export-passphrase', s.export_passphrase === '***' ? '' : (s.export_passphrase || ''));
     setPreferredServerDisplay(s.preferred_server_id || '', s.preferred_server_name || '');
     updatePreferredServerVisibility();
   } catch { /* already loaded */ }
@@ -448,6 +501,9 @@ async function saveSettings() {
     webhooks: (g('cfg-webhooks')?.value || '').split('\n').map(u => u.trim()).filter(Boolean),
     preferred_server_id:   g('pref-server-id')?.value || '',
     preferred_server_name: g('pref-server-name')?.value || '',
+    date_format:           g('cfg-date-format')?.value || '',
+    time_format:           g('cfg-time-format')?.value || '',
+    export_passphrase:     g('cfg-export-passphrase')?.value || '',
   };
   try {
     const res  = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -460,6 +516,8 @@ async function saveSettings() {
       msg.textContent = 'Saved';
       msg.className = 'save-msg ok';
       toast('Settings saved', 'ok');
+      DATE_FORMAT = g('cfg-date-format')?.value || '';
+      TIME_FORMAT = g('cfg-time-format')?.value || '';
       setTimeout(() => { msg.textContent = ''; }, 3000);
     }
   } catch (e) {
@@ -471,6 +529,58 @@ async function saveSettings() {
   }
 }
 document.getElementById('save-btn')?.addEventListener('click', saveSettings);
+
+// ── Export / Import ───────────────────────────────────────────────────────
+async function exportSettings(encrypted) {
+  try {
+    const res = await fetch(`/api/settings/export?encrypted=${encrypted}`);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast(d.error || 'Export failed', 'err');
+      return;
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'speedtest-settings.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    toast('Settings exported', 'ok');
+  } catch (e) {
+    toast('Export failed: ' + e.message, 'err');
+  }
+}
+
+async function importSettings() {
+  const file = document.getElementById('import-file')?.files?.[0];
+  if (!file) return;
+  const msg = document.getElementById('import-msg');
+  if (msg) { msg.textContent = 'Importing…'; msg.className = 'save-msg'; }
+  try {
+    const res = await fetch('/api/settings/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await file.text(),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (msg) { msg.textContent = data.error || 'Import failed'; msg.className = 'save-msg err'; }
+      toast(data.error || 'Import failed', 'err');
+      return;
+    }
+    const n = data.channels_imported ?? 0;
+    if (msg) { msg.textContent = `Imported (${n} channel${n !== 1 ? 's' : ''})`; msg.className = 'save-msg ok'; }
+    toast(`Settings imported — ${n} channel${n !== 1 ? 's' : ''} restored`, 'ok');
+    await loadSettings();
+    await loadChannels();
+    setTimeout(() => { if (msg) msg.textContent = ''; }, 4000);
+  } catch (e) {
+    if (msg) { msg.textContent = 'Network error'; msg.className = 'save-msg err'; }
+    toast('Network error: ' + e.message, 'err');
+  }
+}
 
 // ── Server picker ─────────────────────────────────────────────────────────
 let allServers = null; // cached after first fetch
@@ -648,7 +758,7 @@ function getProviderConfig() {
   if (p === 'shoutrrr') return { url: document.getElementById('ch-shoutrrr-url').value.trim() };
   if (p === 'greenapi') return {
     instance_id: document.getElementById('ch-ga-instance').value.trim(),
-    token:       document.getElementById('ch-ga-token').value,
+    token:       document.getElementById('ch-ga-token').value.trim(),
     phone:       document.getElementById('ch-ga-phone').value.trim(),
     api_url:     document.getElementById('ch-ga-apiurl').value.trim(),
   };
@@ -656,7 +766,7 @@ function getProviderConfig() {
     base_url: document.getElementById('ch-wa-baseurl').value.trim(),
     phone:    document.getElementById('ch-wa-phone').value.trim(),
     username: document.getElementById('ch-wa-user').value.trim(),
-    password: document.getElementById('ch-wa-pass').value,
+    password: document.getElementById('ch-wa-pass').value.trim(),
   };
 }
 
@@ -744,6 +854,15 @@ document.getElementById('channel-dialog')?.addEventListener('click', function(e)
   if (e.target === this) closeDialog();
 });
 
+// ── Export/Import listeners ───────────────────────────────────────────────
+document.getElementById('export-enc-btn')?.addEventListener('click', () => exportSettings(true));
+document.getElementById('export-plain-btn')?.addEventListener('click', () => exportSettings(false));
+document.getElementById('import-btn')?.addEventListener('click', () => {
+  const fi = document.getElementById('import-file');
+  if (fi) { fi.value = ''; fi.click(); }
+});
+document.getElementById('import-file')?.addEventListener('change', importSettings);
+
 // ── Pagination listeners ──────────────────────────────────────────────────
 document.getElementById('page-prev')?.addEventListener('click', () => {
   if (currentPage > 0) loadPage(currentPage - 1);
@@ -753,4 +872,4 @@ document.getElementById('page-next')?.addEventListener('click', () => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────
-loadAll();
+loadSettings().then(() => loadAll());

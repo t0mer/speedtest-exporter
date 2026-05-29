@@ -18,7 +18,11 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if settings == nil {
 		settings = s.defaultSettings()
 	}
-	writeJSON(w, http.StatusOK, settings)
+	masked := *settings
+	if masked.ExportPassphrase != "" {
+		masked.ExportPassphrase = "***"
+	}
+	writeJSON(w, http.StatusOK, &masked)
 }
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +44,19 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if settings.ExportPassphrase == "***" {
+		current, err := s.service.DB().GetSettings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if current != nil {
+			settings.ExportPassphrase = current.ExportPassphrase
+		} else {
+			settings.ExportPassphrase = ""
+		}
+	}
+
 	if settings.Webhooks == nil {
 		settings.Webhooks = []string{}
 	}
@@ -55,7 +72,11 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		slog.Error("scheduler restart failed", "error", err)
 	}
 
-	writeJSON(w, http.StatusOK, &settings)
+	resp := settings
+	if resp.ExportPassphrase != "" {
+		resp.ExportPassphrase = "***"
+	}
+	writeJSON(w, http.StatusOK, &resp)
 }
 
 // defaultSettings returns settings derived from the startup config,

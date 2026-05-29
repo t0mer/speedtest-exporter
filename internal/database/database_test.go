@@ -160,3 +160,37 @@ func TestSaveSettingsOverwrites(t *testing.T) {
 	assert.Equal(t, "ookla", out.Engine)
 	assert.Equal(t, "@every 6h", out.Schedule)
 }
+
+func TestSaveAndGetSettingsDateTimeFormat(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	in := &model.Settings{
+		Engine:     "go",
+		DateFormat: "YYYY-MM-DD",
+		TimeFormat: "HH:mm:ss",
+	}
+	require.NoError(t, db.SaveSettings(ctx, in))
+
+	out, err := db.GetSettings(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	assert.Equal(t, "YYYY-MM-DD", out.DateFormat)
+	assert.Equal(t, "HH:mm:ss", out.TimeFormat)
+}
+
+func TestSaveAndGetSettingsExportPassphrase(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	in := &model.Settings{
+		Engine:           "go",
+		ExportPassphrase: "s3cr3t-passphrase",
+	}
+	require.NoError(t, db.SaveSettings(ctx, in))
+
+	out, err := db.GetSettings(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	assert.Equal(t, "s3cr3t-passphrase", out.ExportPassphrase)
+}

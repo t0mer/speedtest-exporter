@@ -107,6 +107,47 @@ func (s *Store) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// DeleteAll removes all notification channels.
+func (s *Store) DeleteAll(ctx context.Context) error {
+	const q = `DELETE FROM notification_channels`
+	if _, err := s.db.ExecContext(ctx, q); err != nil {
+		return fmt.Errorf("delete all channels: %w", err)
+	}
+	return nil
+}
+
+// ReplaceAll atomically deletes all channels and inserts the given list.
+func (s *Store) ReplaceAll(ctx context.Context, channels []Channel) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM notification_channels`); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("delete channels: %w", err)
+	}
+	for _, ch := range channels {
+		enc, err := crypto.Encrypt(s.key, ch.Config)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("encrypt channel %q: %w", ch.Name, err)
+		}
+		const q = `INSERT INTO notification_channels
+			(name, provider, config_encrypted, enabled, notify_on_success, notify_on_failure, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?)`
+		now := time.Now().UTC()
+		if _, err := tx.ExecContext(ctx, q,
+			ch.Name, string(ch.Provider), enc,
+			btoi(ch.Enabled), btoi(ch.NotifyOnSuccess), btoi(ch.NotifyOnFailure),
+			now, now,
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("insert channel %q: %w", ch.Name, err)
+		}
+	}
+	return tx.Commit()
+}
+
 func (s *Store) scan(scan func(...any) error) (*Channel, error) {
 	var ch Channel
 	var prov string

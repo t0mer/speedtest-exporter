@@ -536,6 +536,10 @@ code { font-family: var(--font-mono); font-size: 0.85em; color: var(--cyan); bac
 .save-msg.ok  { color: var(--green); }
 .save-msg.err { color: var(--red); }
 
+.export-import-row { display: flex; flex-direction: column; gap: 0.75rem; }
+.export-btns { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.import-row { display: flex; align-items: center; gap: 0.75rem; }
+
 /* ── Notifications page ──────────────────────────────── */
 .notif-hd {
   display: flex;

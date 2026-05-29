@@ -5,11 +5,14 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // Encrypt encrypts plaintext with the 32-byte key using AES-256-GCM.
@@ -72,4 +75,10 @@ func LoadOrCreateKey(dir string) ([]byte, error) {
 		return nil, fmt.Errorf("save key: %w", err)
 	}
 	return key, nil
+}
+
+// DeriveKey derives a 32-byte AES-256 key from a passphrase and salt
+// using PBKDF2-SHA256 with 100 000 iterations.
+func DeriveKey(passphrase string, salt []byte) []byte {
+	return pbkdf2.Key([]byte(passphrase), salt, 100_000, 32, sha256.New)
 }
