@@ -55,4 +55,12 @@ type Settings struct {
 	// the runner falls back to the nearest available server automatically.
 	PreferredServerID   string `json:"preferred_server_id"`
 	PreferredServerName string `json:"preferred_server_name"`
+	// DateFormat controls how dates are displayed in the UI.
+	// Empty string means use the browser's locale default.
+	// Valid values: "YYYY-MM-DD", "MM/DD/YYYY", "DD/MM/YYYY", "DD.MM.YYYY"
+	DateFormat string `json:"date_format"`
+	// TimeFormat controls how times are displayed in the UI.
+	// Empty string means use the browser's locale default.
+	// Valid values: "HH:mm", "HH:mm:ss", "hh:mm a", "hh:mm:ss a"
+	TimeFormat string `json:"time_format"`
 }
