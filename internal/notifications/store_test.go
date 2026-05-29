@@ -107,3 +107,38 @@ func TestStoreMaskConfig(t *testing.T) {
 	assert.Equal(t, "slack://***", cfg.URL)
 	assert.NotContains(t, string(view.Config), "secret-token")
 }
+
+func TestDeleteAll(t *testing.T) {
+	db, err := database.Open(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	key := make([]byte, 32)
+	s := notifications.NewStore(db.SQL(), key)
+	ctx := context.Background()
+
+	ch1 := &notifications.Channel{
+		Name:     "Alpha",
+		Provider: notifications.ProviderShoutrrr,
+		Config:   json.RawMessage(`{"url":"slack://t@c"}`),
+		Enabled:  true,
+	}
+	ch2 := &notifications.Channel{
+		Name:     "Beta",
+		Provider: notifications.ProviderShoutrrr,
+		Config:   json.RawMessage(`{"url":"discord://t@c"}`),
+		Enabled:  true,
+	}
+	require.NoError(t, s.Save(ctx, ch1))
+	require.NoError(t, s.Save(ctx, ch2))
+
+	list, err := s.List(ctx)
+	require.NoError(t, err)
+	assert.Len(t, list, 2)
+
+	require.NoError(t, s.DeleteAll(ctx))
+
+	list, err = s.List(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, list)
+}

@@ -107,6 +107,15 @@ func (s *Store) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// DeleteAll removes all notification channels.
+func (s *Store) DeleteAll(ctx context.Context) error {
+	const q = `DELETE FROM notification_channels`
+	if _, err := s.db.ExecContext(ctx, q); err != nil {
+		return fmt.Errorf("delete all channels: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) scan(scan func(...any) error) (*Channel, error) {
 	var ch Channel
 	var prov string
