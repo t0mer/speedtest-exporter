@@ -809,4 +809,4 @@ document.getElementById('page-next')?.addEventListener('click', () => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────
-loadAll();
+loadSettings().then(() => loadAll());
