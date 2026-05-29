@@ -48,7 +48,9 @@ function formatTime(d) {
 }
 
 function formatDateTime(isoString) {
+  if (!isoString) return '—';
   const d = new Date(isoString);
+  if (isNaN(d)) return '—';
   return formatDate(d) + ' ' + formatTime(d);
 }
 
@@ -512,6 +514,8 @@ async function saveSettings() {
       msg.textContent = 'Saved';
       msg.className = 'save-msg ok';
       toast('Settings saved', 'ok');
+      DATE_FORMAT = g('cfg-date-format')?.value || '';
+      TIME_FORMAT = g('cfg-time-format')?.value || '';
       setTimeout(() => { msg.textContent = ''; }, 3000);
     }
   } catch (e) {
