@@ -13,6 +13,7 @@ Monitor your internet connection speed with automated tests, a live dashboard, P
 - **Threshold notifications** — alert on slow speeds or high latency via Shoutrrr (Slack, Discord, Telegram, SMTP…), GreenAPI (WhatsApp cloud), or self-hosted WhatsApp Web
 - **AES-256-GCM encrypted credentials** — notification secrets never stored in plaintext
 - **Date & time format** — choose how timestamps are displayed across the dashboard (ISO, US, EU, 12h/24h)
+- **Settings export / import** — back up all settings and notification channels to a JSON file; restore on any machine with optional PBKDF2-encrypted credentials
 - **Settings UI** — all runtime config editable in the browser without a restart
 - **Responsive, mobile-friendly** — bottom navigation, full gauge layout on any screen size
 
@@ -30,7 +31,13 @@ The dashboard shows the latest download speed on an animated arc gauge, secondar
 
 ![Settings](assets/screenshots/settings.png)
 
-All runtime configuration is editable in the browser without a restart. Settings are grouped into: **Display** (date/time format), **Engine** (test backend and preferred server), **Schedule** (cron expression), **Thresholds** (breach limits for notifications), and **Webhooks**.
+All runtime configuration is editable in the browser without a restart. Settings are grouped into: **Display** (date/time format), **Engine** (test backend and preferred server), **Schedule** (cron expression), **Thresholds** (breach limits for notifications), **Webhooks**, and **Export / Import**.
+
+### Export / Import
+
+![Export / Import](assets/screenshots/export-import.png)
+
+Back up all settings and notification channels to a JSON file. Choose **Export (Encrypted)** to protect channel credentials with PBKDF2 + AES-256-GCM using a stored passphrase, or **Export (Unencrypted)** for plaintext. The export passphrase is never written into the file. Use **Import** to restore on any machine — set the same passphrase first when importing an encrypted file.
 
 ### Server Picker
 
@@ -236,6 +243,38 @@ Notifications fire when a metric breaches its limit. Set to `0` to disable a thr
 | Max Packet Loss | ratio 0–1 | Alert if packet loss exceeds this value |
 | Cooldown | minutes | Minimum gap between repeat alerts for the same metric |
 
+### Export / Import
+
+| Field / Button | Description |
+|---|---|
+| Export Passphrase | Passphrase used to encrypt channel credentials on export. Set the same passphrase on the destination machine before importing an encrypted file. Masked (`***`) in all API responses. |
+| Export (Encrypted) | Downloads `speedtest-settings.json` with channel credentials encrypted via PBKDF2-SHA256 + AES-256-GCM. Requires a non-empty passphrase. |
+| Export (Unencrypted) | Downloads `speedtest-settings.json` with channel credentials in plaintext. |
+| Import | Opens a file picker. Accepts a file produced by either export variant. On success, all settings and channels are replaced atomically. |
+
+The export file format:
+
+```json
+{
+  "version": 1,
+  "encrypted": false,
+  "salt": "",
+  "settings": { "engine": "go", "schedule": "@every 1h", ... },
+  "channels": [
+    {
+      "name": "Team Slack",
+      "provider": "shoutrrr",
+      "enabled": true,
+      "notify_on_success": true,
+      "notify_on_failure": false,
+      "config": { "url": "slack://token@channel" }
+    }
+  ]
+}
+```
+
+For encrypted exports, each channel has `"config_encrypted": "<base64>"` instead of `"config"`, and `"salt"` contains the hex-encoded PBKDF2 salt.
+
 ---
 
 ## Prometheus Metrics
@@ -283,6 +322,8 @@ All endpoints return JSON.
 | `GET` | `/api/servers` | List nearby Speedtest.net servers |
 | `GET` | `/api/settings` | Read current runtime settings |
 | `PUT` | `/api/settings` | Update runtime settings (applied immediately) |
+| `GET` | `/api/settings/export?encrypted=true\|false` | Download settings + channels as a JSON file |
+| `POST` | `/api/settings/import` | Restore settings + channels from an export file |
 | `GET` | `/api/notifications` | List notification channels |
 | `POST` | `/api/notifications` | Add a channel |
 | `PUT` | `/api/notifications/{id}` | Update a channel |
@@ -307,12 +348,14 @@ All endpoints return JSON.
   "preferred_server_id": "",
   "preferred_server_name": "",
   "date_format": "",
-  "time_format": ""
+  "time_format": "",
+  "export_passphrase": "***"
 }
 ```
 
 `date_format` accepts `""` (browser locale), `"YYYY-MM-DD"`, `"MM/DD/YYYY"`, `"DD/MM/YYYY"`, `"DD.MM.YYYY"`.  
-`time_format` accepts `""` (browser locale), `"HH:mm"`, `"HH:mm:ss"`, `"hh:mm a"`, `"hh:mm:ss a"`.
+`time_format` accepts `""` (browser locale), `"HH:mm"`, `"HH:mm:ss"`, `"hh:mm a"`, `"hh:mm:ss a"`.  
+`export_passphrase` is always returned as `"***"` when set (never in plaintext); send `"***"` in PUT to keep the stored value unchanged.
 
 ### SSE stream format (`/api/test/stream`)
 
@@ -349,7 +392,16 @@ Covers Slack, Discord, Telegram, Gotify, SMTP, ntfy, and more via a single URL s
 
 ### GreenAPI (WhatsApp cloud)
 
-Requires a [GreenAPI](https://green-api.com) account. Fields: Instance ID, Token, Recipient Phone (international format, no `+`).
+Requires a [GreenAPI](https://green-api.com) account.
+
+| Field | Description |
+|---|---|
+| Instance ID | From the GreenAPI console (e.g. `1234567890`) |
+| Token | API token from the console — copy exactly, no leading/trailing spaces |
+| Recipient Phone | International format, digits only, **no** `+` or spaces (e.g. `972501234567`) |
+| API URL | Leave blank for `https://api.green-api.com`. Set to your cluster URL if the GreenAPI console shows one (e.g. `https://7103.api.greenapi.com`) |
+
+The sender automatically appends `@c.us` to the phone number if not already present.
 
 ### WhatsApp Web (self-hosted)
 
