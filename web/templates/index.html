@@ -169,6 +169,32 @@
         <div class="settings-page">
 
           <div class="stg-block">
+            <div class="stg-block-hd"><h3>Display</h3><p>Date and time format used across the dashboard.</p></div>
+            <div class="stg-block-body">
+              <div class="fields-2">
+                <div class="field"><label class="field-lbl" for="cfg-date-format">Date Format</label>
+                  <div class="sel-wrap"><select id="cfg-date-format" class="field-sel">
+                    <option value="">Default (browser locale)</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD · e.g. 2025-01-15</option>
+                    <option value="MM/DD/YYYY">MM/DD/YYYY · e.g. 01/15/2025</option>
+                    <option value="DD/MM/YYYY">DD/MM/YYYY · e.g. 15/01/2025</option>
+                    <option value="DD.MM.YYYY">DD.MM.YYYY · e.g. 15.01.2025</option>
+                  </select><svg class="sel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg></div>
+                </div>
+                <div class="field"><label class="field-lbl" for="cfg-time-format">Time Format</label>
+                  <div class="sel-wrap"><select id="cfg-time-format" class="field-sel">
+                    <option value="">Default (browser locale)</option>
+                    <option value="HH:mm">HH:mm · e.g. 14:30</option>
+                    <option value="HH:mm:ss">HH:mm:ss · e.g. 14:30:45</option>
+                    <option value="hh:mm a">hh:mm AM/PM · e.g. 2:30 PM</option>
+                    <option value="hh:mm:ss a">hh:mm:ss AM/PM · e.g. 2:30:45 PM</option>
+                  </select><svg class="sel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stg-block">
             <div class="stg-block-hd"><h3>Engine</h3><p>Backend used to run the speed test.</p></div>
             <div class="stg-block-body">
               <div class="field"><label class="field-lbl" for="cfg-engine">Test Backend</label>
