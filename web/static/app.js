@@ -6,6 +6,52 @@ const ESC = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 function esc(s) { return String(s == null ? '—' : s).replace(/[&<>"']/g, c => ESC[c]); }
 function fmt(n, dec) { return n == null ? '—' : Number(n).toFixed(dec ?? 1); }
 
+// ── Date / time format state (set from settings on load) ──────────────────
+let DATE_FORMAT = ''; // "" = browser locale; see formatDate()
+let TIME_FORMAT = ''; // "" = browser locale; see formatTime()
+
+// ── Date / time formatters ─────────────────────────────────────────────────
+function formatDate(d) {
+  if (!DATE_FORMAT) return d.toLocaleDateString();
+  const y   = d.getFullYear();
+  const mon = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  switch (DATE_FORMAT) {
+    case 'YYYY-MM-DD': return `${y}-${mon}-${day}`;
+    case 'MM/DD/YYYY': return `${mon}/${day}/${y}`;
+    case 'DD/MM/YYYY': return `${day}/${mon}/${y}`;
+    case 'DD.MM.YYYY': return `${day}.${mon}.${y}`;
+    default:           return d.toLocaleDateString();
+  }
+}
+
+function formatTime(d) {
+  if (!TIME_FORMAT) return d.toLocaleTimeString();
+  const h24 = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const sec = String(d.getSeconds()).padStart(2, '0');
+  switch (TIME_FORMAT) {
+    case 'HH:mm':     return `${String(h24).padStart(2, '0')}:${min}`;
+    case 'HH:mm:ss':  return `${String(h24).padStart(2, '0')}:${min}:${sec}`;
+    case 'hh:mm a': {
+      const ampm = h24 >= 12 ? 'PM' : 'AM';
+      const h12  = h24 % 12 || 12;
+      return `${String(h12).padStart(2, '0')}:${min} ${ampm}`;
+    }
+    case 'hh:mm:ss a': {
+      const ampm = h24 >= 12 ? 'PM' : 'AM';
+      const h12  = h24 % 12 || 12;
+      return `${String(h12).padStart(2, '0')}:${min}:${sec} ${ampm}`;
+    }
+    default: return d.toLocaleTimeString();
+  }
+}
+
+function formatDateTime(isoString) {
+  const d = new Date(isoString);
+  return formatDate(d) + ' ' + formatTime(d);
+}
+
 // ── Toast system ──────────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
   const stack = document.getElementById('toast-stack');
@@ -141,7 +187,7 @@ function renderLatest(r) {
   if (ispEl)    ispEl.textContent = r.isp || '';
   if (tsEl) {
     const d = new Date(r.timestamp);
-    tsEl.textContent = `Last test: ${d.toLocaleTimeString()} · ${d.toLocaleDateString()}`;
+    tsEl.textContent = `Last test: ${formatDate(d)} · ${formatTime(d)}`;
   }
 }
 
@@ -198,7 +244,7 @@ function renderTablePage(rows, compRow) {
     const pg   = delta(r.ping_ms,       prev?.ping_ms,       false);
     const jt   = delta(r.jitter_ms,     prev?.jitter_ms,     false);
     return `<tr>
-      <td>${esc(new Date(r.timestamp).toLocaleString())}</td>
+      <td>${esc(formatDateTime(r.timestamp))}</td>
       <td class="num-cell">${fmt(r.download_mbps)}${dl} <span class="unit">Mbps</span></td>
       <td class="num-cell">${fmt(r.upload_mbps)}${ul} <span class="unit">Mbps</span></td>
       <td class="num-cell">${fmt(r.ping_ms)}${pg} <span class="unit">ms</span></td>
@@ -423,6 +469,10 @@ async function loadSettings() {
     n('cfg-max-packet-loss',  s.max_packet_loss_ratio);
     n('cfg-cooldown',         s.cooldown_minutes);
     v('cfg-webhooks', (s.webhooks || []).join('\n'));
+    DATE_FORMAT = s.date_format || '';
+    TIME_FORMAT = s.time_format || '';
+    v('cfg-date-format', DATE_FORMAT);
+    v('cfg-time-format', TIME_FORMAT);
     setPreferredServerDisplay(s.preferred_server_id || '', s.preferred_server_name || '');
     updatePreferredServerVisibility();
   } catch { /* already loaded */ }
@@ -448,6 +498,8 @@ async function saveSettings() {
     webhooks: (g('cfg-webhooks')?.value || '').split('\n').map(u => u.trim()).filter(Boolean),
     preferred_server_id:   g('pref-server-id')?.value || '',
     preferred_server_name: g('pref-server-name')?.value || '',
+    date_format:           g('cfg-date-format')?.value || '',
+    time_format:           g('cfg-time-format')?.value || '',
   };
   try {
     const res  = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
