@@ -266,6 +266,37 @@
             </div>
           </div>
 
+          <div class="stg-block">
+            <div class="stg-block-hd"><h3>Export / Import</h3><p>Back up all settings and notification channels to a file, or restore from a previous export.</p></div>
+            <div class="stg-block-body">
+              <div class="field">
+                <label class="field-lbl" for="cfg-export-passphrase">Export Passphrase</label>
+                <input type="password" id="cfg-export-passphrase" class="field-input" placeholder="••••••••" autocomplete="new-password">
+                <p class="field-hint">Used to encrypt credentials when exporting. Set the same passphrase on the destination machine before importing an encrypted file.</p>
+              </div>
+              <div class="export-import-row">
+                <div class="export-btns">
+                  <button type="button" class="btn-secondary" id="export-enc-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export (Encrypted)
+                  </button>
+                  <button type="button" class="btn-ghost" id="export-plain-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export (Unencrypted)
+                  </button>
+                </div>
+                <div class="import-row">
+                  <input type="file" id="import-file" accept=".json" style="display:none">
+                  <button type="button" class="btn-secondary" id="import-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Import
+                  </button>
+                  <span class="save-msg" id="import-msg"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="stg-footer">
             <button class="btn-primary" id="save-btn">Save Settings</button>
             <span class="save-msg" id="settings-msg"></span>
