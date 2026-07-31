@@ -23,43 +23,43 @@ Monitor your internet connection speed with automated tests, a live dashboard, P
 
 ### Dashboard
 
-![Dashboard](assets/screenshots/dashboard.png)
+![Dashboard](https://raw.githubusercontent.com/t0mer/speedtest-exporter/main/assets/screenshots/dashboard.png)
 
 The dashboard shows the latest download speed on an animated arc gauge, secondary metrics (upload, ping, jitter, server), a 7-day summary, a dual-line speed history chart, and a paginated results table. Each row includes ▲/▼ arrows that compare the result to the previous test — green for improvement, red for regression.
 
 ### Settings
 
-![Settings](assets/screenshots/settings.png)
+![Settings](https://raw.githubusercontent.com/t0mer/speedtest-exporter/main/assets/screenshots/settings.png)
 
 All runtime configuration is editable in the browser without a restart. Settings are grouped into: **Display** (date/time format), **Engine** (test backend and preferred server), **Schedule** (cron expression), **Thresholds** (breach limits for notifications), **Webhooks**, and **Export / Import**.
 
 ### Export / Import
 
-![Export / Import](assets/screenshots/export-import.png)
+![Export / Import](https://raw.githubusercontent.com/t0mer/speedtest-exporter/main/assets/screenshots/export-import.png)
 
 Back up all settings and notification channels to a JSON file. Choose **Export (Encrypted)** to protect channel credentials with PBKDF2 + AES-256-GCM using a stored passphrase, or **Export (Unencrypted)** for plaintext. The export passphrase is never written into the file. Use **Import** to restore on any machine — set the same passphrase first when importing an encrypted file.
 
 ### Server Picker
 
-![Server Picker](assets/screenshots/server-picker.png)
+![Server Picker](https://raw.githubusercontent.com/t0mer/speedtest-exporter/main/assets/screenshots/server-picker.png)
 
 Browse and search nearby Speedtest.net servers sorted by distance. Selecting a preferred server pins future tests to that host; if it is unreachable the nearest available server is used automatically.
 
 ### Alerts (Notification Channels)
 
-![Notifications](assets/screenshots/notifications.png)
+![Notifications](https://raw.githubusercontent.com/t0mer/speedtest-exporter/main/assets/screenshots/notifications.png)
 
 The Alerts tab manages notification channels. Each channel supports Shoutrrr (Slack, Discord, Telegram, SMTP, ntfy, Gotify…), GreenAPI (WhatsApp cloud), or self-hosted WhatsApp Web.
 
 ### Add Channel
 
-![Add Channel](assets/screenshots/add-channel.png)
+![Add Channel](https://raw.githubusercontent.com/t0mer/speedtest-exporter/main/assets/screenshots/add-channel.png)
 
 The Add Channel dialog supports multiple providers. Toggle **Notify on success** and **Notify on failure** independently, and send a live test message before saving to confirm the channel is working.
 
 ### Mobile
 
-![Mobile](assets/screenshots/mobile.png)
+![Mobile](https://raw.githubusercontent.com/t0mer/speedtest-exporter/main/assets/screenshots/mobile.png)
 
 Fully responsive at 390 px wide. The bottom navigation bar provides one-thumb access to Dashboard, Settings, and the Run Test button.
 
